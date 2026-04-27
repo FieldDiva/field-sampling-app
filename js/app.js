@@ -14,6 +14,7 @@ let currentSession = null;
 let currentPlotKey = null;
 let currentMode = null; // 'field' | 'lab' | 'ref' | 'lys'
 let selectedSide = 'East';
+let currentPlotGPS = { lat: null, lng: null };
 let selectedSessionType = 'Weekly';
 
 // --- STORAGE ---
@@ -115,6 +116,7 @@ function captureGPS() {
       el.classList.add('captured');
       el.dataset.lat = lat;
       el.dataset.lng = lng;
+      currentPlotGPS = { lat, lng };
     },
     err => {
       el.textContent = 'GPS error - try again';
@@ -511,6 +513,9 @@ function openPlotEntry(key, type) {
   badge.textContent = isLys ? 'LYSIMETER' : 'FIELD DATA';
   badge.className = `badge${isLys ? ' lysimeter' : ''}`;
 
+  // Reset GPS for this plot, restore if previously saved
+  currentPlotGPS = { lat: data.gps_lat || null, lng: data.gps_lng || null };
+
   // Build combined field + lab form with tabs
   const form = document.getElementById('field-entry-form');
   form.innerHTML = `
@@ -744,9 +749,8 @@ function saveFieldEntry() {
   }
 
   // GPS per plot
-  const gpsEl = document.getElementById('plot-gps-display');
-  const gps_lat = gpsEl?.dataset.lat || null;
-  const gps_lng = gpsEl?.dataset.lng || null;
+  const gps_lat = currentPlotGPS.lat;
+  const gps_lng = currentPlotGPS.lng;
 
   // Destructive plot save
   const c1 = parseFloat(document.getElementById('f-count1')?.value) || null;
