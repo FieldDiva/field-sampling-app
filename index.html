@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Field Sampler" />
+  <title>Field Sampler</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- SCREEN: Home -->
+  <div id="screen-home" class="screen active">
+    <div class="home-header">
+      <div class="app-logo">🌾</div>
+      <h1>Field Sampler</h1>
+      <p class="subtitle">Forage Sorghum · 2025</p>
+    </div>
+    <div class="home-actions">
+      <button class="btn-primary" onclick="showScreen('screen-new-session')">+ New Sampling Session</button>
+      <button class="btn-secondary" onclick="showScreen('screen-sessions')">View Past Sessions</button>
+    </div>
+    <div id="home-recent" class="recent-sessions"></div>
+  </div>
+
+  <!-- SCREEN: New Session Setup -->
+  <div id="screen-new-session" class="screen">
+    <div class="screen-header">
+      <button class="btn-back" onclick="showScreen('screen-home')">← Back</button>
+      <h2>New Session</h2>
+    </div>
+    <div class="form-body">
+      <div class="field-group">
+        <label>Date</label>
+        <input type="date" id="session-date" />
+      </div>
+      <div class="field-group">
+        <label>Crop</label>
+        <input type="text" id="session-crop" value="Forage Sorghum" />
+      </div>
+      <div class="field-group">
+        <label>Year</label>
+        <input type="number" id="session-year" value="2025" />
+      </div>
+      <div class="field-group">
+        <label>Side</label>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="side-east" onclick="selectSide('East')">East</button>
+          <button class="toggle-btn" id="side-west" onclick="selectSide('West')">West</button>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Session Type</label>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="type-weekly" onclick="selectSessionType('Weekly')">Weekly</button>
+          <button class="toggle-btn" id="type-harvest" onclick="selectSessionType('Harvest')">Harvest</button>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>GPS Location</label>
+        <div class="gps-row">
+          <span id="gps-display" class="gps-value">Not captured</span>
+          <button class="btn-gps" onclick="captureGPS()">📍 Capture</button>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Technician</label>
+        <input type="text" id="session-tech" placeholder="Your name" />
+      </div>
+    </div>
+    <div class="screen-footer">
+      <button class="btn-primary" onclick="startSession()">Start Session →</button>
+    </div>
+  </div>
+
+  <!-- SCREEN: Session Menu (list of plots to fill out) -->
+  <div id="screen-session-menu" class="screen">
+    <div class="screen-header">
+      <button class="btn-back" onclick="showScreen('screen-home')">← Home</button>
+      <h2 id="session-menu-title">Session</h2>
+    </div>
+    <div class="session-info-bar" id="session-info-bar"></div>
+
+    <div class="section-label">DESTRUCTIVE SAMPLES</div>
+    <div id="plot-list" class="plot-list"></div>
+
+    <div class="section-label">REFERENCE ROWS</div>
+    <div id="ref-list" class="plot-list"></div>
+
+    <div class="section-label">LYSIMETER BOXES</div>
+    <div id="lys-list" class="plot-list"></div>
+
+    <div class="screen-footer">
+      <button class="btn-secondary" onclick="showScreen('screen-sessions')">Save & Exit</button>
+      <button class="btn-primary" onclick="exportSession()">Export Excel</button>
+    </div>
+  </div>
+
+  <!-- SCREEN: Field Entry (destructive plot) -->
+  <div id="screen-field-entry" class="screen">
+    <div class="screen-header">
+      <button class="btn-back" onclick="backToSessionMenu()">← Back</button>
+      <h2 id="field-entry-title">Plot</h2>
+      <span id="field-entry-badge" class="badge"></span>
+    </div>
+    <div class="form-body" id="field-entry-form">
+      <!-- Dynamically filled -->
+    </div>
+    <div class="screen-footer">
+      <button class="btn-primary" onclick="saveFieldEntry()">Save →</button>
+    </div>
+  </div>
+
+  <!-- SCREEN: Lab Entry -->
+  <div id="screen-lab-entry" class="screen">
+    <div class="screen-header">
+      <button class="btn-back" onclick="backToSessionMenu()">← Back</button>
+      <h2 id="lab-entry-title">Lab Data</h2>
+    </div>
+    <div class="form-body" id="lab-entry-form">
+      <!-- Dynamically filled -->
+    </div>
+    <div class="screen-footer">
+      <button class="btn-primary" onclick="saveLabEntry()">Save →</button>
+    </div>
+  </div>
+
+  <!-- SCREEN: Past Sessions -->
+  <div id="screen-sessions" class="screen">
+    <div class="screen-header">
+      <button class="btn-back" onclick="showScreen('screen-home')">← Back</button>
+      <h2>Past Sessions</h2>
+    </div>
+    <div id="sessions-list" class="sessions-list"></div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
