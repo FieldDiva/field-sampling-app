@@ -1,5 +1,5 @@
 // Service Worker for Field Sampler PWA
-const CACHE_NAME = 'field-sampler-v1';
+const CACHE_NAME = 'field-sampler-v2';
 const ASSETS = [
   '/field-sampling-app/',
   '/field-sampling-app/index.html',
