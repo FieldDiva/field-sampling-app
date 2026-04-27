@@ -78,6 +78,8 @@ function initNewSessionForm() {
   updateToggle('type-weekly', 'type-harvest', 'Weekly');
   document.getElementById('gps-display').textContent = 'Not captured';
   document.getElementById('gps-display').classList.remove('captured');
+  document.getElementById('gps-display').dataset.lat = '';
+  document.getElementById('gps-display').dataset.lng = '';
 }
 
 function selectSide(side) {
@@ -110,10 +112,8 @@ function captureGPS() {
       const lng = pos.coords.longitude.toFixed(6);
       el.textContent = `${lat}, ${lng}`;
       el.classList.add('captured');
-      if (currentSession) {
-        currentSession.gps = { lat, lng };
-        saveCurrentSession();
-      }
+      el.dataset.lat = lat;
+      el.dataset.lng = lng;
     },
     err => {
       el.textContent = 'GPS error - try again';
@@ -131,8 +131,8 @@ function startSession() {
 
   if (!date) { showToast('Please enter a date'); return; }
 
-  const gpsText = document.getElementById('gps-display').textContent;
-  const gps = gpsText.includes(',') ? gpsText : null;
+  const gpsEl = document.getElementById('gps-display');
+  const gps = gpsEl.dataset.lat ? { lat: gpsEl.dataset.lat, lng: gpsEl.dataset.lng } : null;
 
   currentSession = {
     id: Date.now().toString(),
