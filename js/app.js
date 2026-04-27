@@ -751,6 +751,7 @@ function saveFieldEntry() {
   // GPS per plot
   const gps_lat = currentPlotGPS.lat;
   const gps_lng = currentPlotGPS.lng;
+  showToast("GPS: " + gps_lat + ", " + gps_lng);
 
   // Destructive plot save
   const c1 = parseFloat(document.getElementById('f-count1')?.value) || null;
