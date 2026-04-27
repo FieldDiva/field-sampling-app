@@ -337,6 +337,12 @@ function openPlotEntry(key) {
     '<div class="field-group"><label>Bag Weight (g)</label>' +
     '<input type="number" inputmode="decimal" id="lab-bag-weight" value="' + (data.bag_weight || '') + '"></div>' +
 
+    '<div class="form-section-title">LEAF AREA METER CALIBRATION</div>' +
+    '<div class="field-group"><label>Index Card Actual Area (cm\u00b2)</label>' +
+    '<input type="number" inputmode="decimal" id="lab-cal-actual" value="' + (data.cal_actual || '') + '" placeholder="e.g. 90.32"></div>' +
+    '<div class="field-group"><label>LA Machine Reading for Card (cm\u00b2)</label>' +
+    '<input type="number" inputmode="decimal" id="lab-cal-machine" value="' + (data.cal_machine || '') + '" placeholder="e.g. 91.50"></div>' +
+
     '<div class="form-section-title">WET WEIGHTS</div>' +
     '<div class="field-group"><label>Leaf Wet Weight (g)</label>' +
     '<input type="number" inputmode="decimal" id="lab-leaf-wet" value="' + (data.leaf_wet || '') + '"></div>' +
@@ -410,7 +416,10 @@ function saveFieldEntry() {
     avg_leaves: avgL ? avgL.toFixed(1) : null,
     notes: document.getElementById('f-notes') ? document.getElementById('f-notes').value : '',
     field_saved: validH.length > 0 || c1 !== null,
-    leaf_area: la, bag_weight: parseFloat(document.getElementById('lab-bag-weight') ? document.getElementById('lab-bag-weight').value : '') || null,
+    leaf_area: la, 
+    bag_weight: parseFloat(document.getElementById('lab-bag-weight') ? document.getElementById('lab-bag-weight').value : '') || null,
+    cal_actual: parseFloat(document.getElementById('lab-cal-actual') ? document.getElementById('lab-cal-actual').value : '') || null,
+    cal_machine: parseFloat(document.getElementById('lab-cal-machine') ? document.getElementById('lab-cal-machine').value : '') || null,
     leaf_wet: parseFloat(document.getElementById('lab-leaf-wet') ? document.getElementById('lab-leaf-wet').value : '') || null,
     stem_wet: parseFloat(document.getElementById('lab-stem-wet') ? document.getElementById('lab-stem-wet').value : '') || null,
     leaf_dry: leafDry, stem_dry: stemDry,
@@ -601,7 +610,8 @@ function exportSession() {
   const header = ['Date','Year','DOY','Plot Name','Growth Stage/#Leaves','Plot Size m2',
     '# Plants/m2','Plant Height in','Plant Height m','Leaf Area cm2',
     'Leaf Wet Weight g','Stem Wet Weight g','Leaf Dry Weight g','Stem Dry Weight g',
-    'LAI','Above Ground Dry Matter g/m2','GPS Lat','GPS Lng','Notes'];
+    'LAI','Above Ground Dry Matter g/m2','GPS Lat','GPS Lng',
+    'Cal Card Actual cm2','Cal Machine Reading cm2','Notes'];
   rows.push(header.join(','));
 
   const date = currentSession.date;
@@ -623,6 +633,7 @@ function exportSession() {
         d.lai ? parseFloat(d.lai).toFixed(6) : '',
         d.agdm ? parseFloat(d.agdm).toFixed(2) : '',
         d.gps_lat || '', d.gps_lng || '',
+        d.cal_actual || '', d.cal_machine || '',
         '"' + ((d.notes || '') + (d.lab_notes ? ' | ' + d.lab_notes : '')) + '"'
       ].join(','));
     });
