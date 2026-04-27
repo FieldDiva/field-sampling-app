@@ -167,7 +167,7 @@ function renderSessionMenu() {
   plotList.innerHTML = '';
   SPANS.forEach(span => {
     ['A','B'].forEach(ab => {
-      const key = `${span}${selectedSide.charAt(0)}${ab}`;
+      const key = `${span}${currentSession.side.charAt(0)}${ab}`;
       const data = currentSession.plots[key] || {};
       const fieldDone = data.field_saved;
       const labDone = data.lab_saved;
