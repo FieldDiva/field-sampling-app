@@ -751,7 +751,6 @@ function saveFieldEntry() {
   // GPS per plot
   const gps_lat = currentPlotGPS.lat;
   const gps_lng = currentPlotGPS.lng;
-  showToast("GPS: " + gps_lat + ", " + gps_lng);
 
   // Destructive plot save
   const c1 = parseFloat(document.getElementById('f-count1')?.value) || null;
@@ -1058,11 +1057,9 @@ window.addEventListener('load', () => {
   if (dateEl) dateEl.value = today;
 });
 
-// Register service worker
+// Service worker disabled during development
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').then(() => {
-    console.log('Service Worker registered');
-  }).catch(err => {
-    console.log('SW registration failed:', err);
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    for (let reg of registrations) reg.unregister();
   });
 }
