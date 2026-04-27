@@ -331,17 +331,17 @@ function openPlotEntry(key) {
     '</div>' + // end tab-content-field
 
     '<div id="tab-content-lab" style="display:none;flex-direction:column;gap:14px;">' +
-    '<div class="field-group"><label>Leaf Area (cm\u00b2)</label>' +
-    '<input type="number" inputmode="decimal" id="lab-leaf-area" value="' + (data.leaf_area || '') + '" oninput="calcLAI()"></div>' +
-
-    '<div class="field-group"><label>Bag Weight (g)</label>' +
-    '<input type="number" inputmode="decimal" id="lab-bag-weight" value="' + (data.bag_weight || '') + '"></div>' +
-
     '<div class="form-section-title">LEAF AREA METER CALIBRATION</div>' +
     '<div class="field-group"><label>Index Card Actual Area (cm\u00b2)</label>' +
     '<input type="number" inputmode="decimal" id="lab-cal-actual" value="' + (data.cal_actual || '') + '" placeholder="e.g. 90.32"></div>' +
     '<div class="field-group"><label>LA Machine Reading for Card (cm\u00b2)</label>' +
     '<input type="number" inputmode="decimal" id="lab-cal-machine" value="' + (data.cal_machine || '') + '" placeholder="e.g. 91.50"></div>' +
+
+    '<div class="field-group"><label>Leaf Area (cm\u00b2)</label>' +
+    '<input type="number" inputmode="decimal" id="lab-leaf-area" value="' + (data.leaf_area || '') + '" oninput="calcLAI()"></div>' +
+
+    '<div class="field-group"><label>Bag Weight (g)</label>' +
+    '<input type="number" inputmode="decimal" id="lab-bag-weight" value="' + (data.bag_weight || '') + '"></div>' +
 
     '<div class="form-section-title">WET WEIGHTS</div>' +
     '<div class="field-group"><label>Leaf Wet Weight (g)</label>' +
