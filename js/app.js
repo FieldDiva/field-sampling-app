@@ -899,14 +899,23 @@ function renderSessionsList() {
     return;
   }
   list.innerHTML = all.map(s => `
-    <div class="session-card" onclick="openSession('${s.id}')">
-      <div class="session-card-info">
+    <div class="session-card">
+      <div class="session-card-info" onclick="openSession('${s.id}')" style="flex:1">
         <h3>${s.date} · ${s.side}</h3>
         <p>${s.crop} · ${s.year} · ${s.type}</p>
       </div>
-      <span class="session-card-arrow">›</span>
+      <button class="btn-delete" onclick="deleteSession('${s.id}')">🗑</button>
     </div>
   `).join('');
+}
+
+function deleteSession(id) {
+  if (!confirm('Delete this session? This cannot be undone.')) return;
+  const sessions = getSessions();
+  delete sessions[id];
+  saveSessionsData(sessions);
+  renderSessionsList();
+  showToast('Session deleted');
 }
 
 function openSession(id) {
