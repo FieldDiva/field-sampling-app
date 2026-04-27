@@ -100,7 +100,8 @@ function updateToggle(idA, idB, activeVal) {
 }
 
 function captureGPS() {
-  const el = document.getElementById('gps-display');
+  const el = document.getElementById('plot-gps-display');
+  if (!el) return;
   el.textContent = 'Capturing...';
   if (!navigator.geolocation) {
     el.textContent = 'GPS not available';
@@ -123,6 +124,13 @@ function captureGPS() {
   );
 }
 
+function autoAdvance(input, nextId) {
+  if (input.value.length > 0) {
+    const next = document.getElementById(nextId);
+    if (next) { next.focus(); next.select(); }
+  }
+}
+
 function startSession() {
   const date = document.getElementById('session-date').value;
   const crop = document.getElementById('session-crop').value;
@@ -130,9 +138,6 @@ function startSession() {
   const tech = document.getElementById('session-tech').value;
 
   if (!date) { showToast('Please enter a date'); return; }
-
-  const gpsEl = document.getElementById('gps-display');
-  const gps = gpsEl.dataset.lat ? { lat: gpsEl.dataset.lat, lng: gpsEl.dataset.lng } : null;
 
   currentSession = {
     id: Date.now().toString(),
@@ -142,7 +147,6 @@ function startSession() {
     side: selectedSide,
     type: selectedSessionType,
     tech,
-    gps,
     plots: {},
     refs: {},
     lys: {}
@@ -517,6 +521,13 @@ function openPlotEntry(key, type) {
 
     <div id="tab-content-field">
       <div class="field-group">
+        <label>GPS Location</label>
+        <div class="gps-row">
+          <span id="plot-gps-display" class="gps-value${data.gps_lat ? ' captured' : ''}">${data.gps_lat ? `${data.gps_lat}, ${data.gps_lng}` : 'Not captured'}</span>
+          <button class="btn-gps" onclick="captureGPS()">📍 Capture</button>
+        </div>
+      </div>
+      <div class="field-group">
         <label>Plant Count — Row 1 (1m)</label>
         <input type="number" id="f-count1" inputmode="numeric" placeholder="e.g. 8" value="${data.count1 || ''}">
       </div>
@@ -535,7 +546,9 @@ function openPlotEntry(key, type) {
           ${[1,2,3,4,5].map(i => `
             <div class="plant-input-wrap">
               <span>P${i}</span>
-              <input type="number" inputmode="decimal" id="f-h${i}" value="${data['h'+i] || ''}" oninput="calcAvg('f-h','f-avg-height')">
+              <input type="number" inputmode="decimal" id="f-h${i}" value="${data['h'+i] || ''}" 
+                oninput="calcAvg('f-h','f-avg-height')"
+                onchange="autoAdvance(this, '${i < 5 ? 'f-h'+(i+1) : 'f-l1'}')">
             </div>
           `).join('')}
         </div>
@@ -548,7 +561,9 @@ function openPlotEntry(key, type) {
           ${[1,2,3,4,5].map(i => `
             <div class="plant-input-wrap">
               <span>P${i}</span>
-              <input type="number" inputmode="numeric" id="f-l${i}" value="${data['l'+i] || ''}" oninput="calcAvg('f-l','f-avg-leaves')">
+              <input type="number" inputmode="numeric" id="f-l${i}" value="${data['l'+i] || ''}" 
+                oninput="calcAvg('f-l','f-avg-leaves')"
+                onchange="autoAdvance(this, '${i < 5 ? 'f-l'+(i+1) : 'f-notes'}')">
             </div>
           `).join('')}
         </div>
@@ -643,6 +658,7 @@ function saveFieldEntry() {
   if (!currentSession.plots[currentPlotKey]) currentSession.plots[currentPlotKey] = {};
   Object.assign(currentSession.plots[currentPlotKey], {
     count1: c1, count2: c2, plants_m2: pm2 ? pm2.toFixed(1) : null,
+    gps_lat, gps_lng,
     h1: heights[0], h2: heights[1], h3: heights[2], h4: heights[3], h5: heights[4],
     avg_height: avgH ? avgH.toFixed(1) : null,
     l1: leaves[0], l2: leaves[1], l3: leaves[2], l4: leaves[3], l5: leaves[4],
@@ -726,6 +742,11 @@ function saveFieldEntry() {
     saveLysEntry();
     return;
   }
+
+  // GPS per plot
+  const gpsEl = document.getElementById('plot-gps-display');
+  const gps_lat = gpsEl?.dataset.lat || null;
+  const gps_lng = gpsEl?.dataset.lng || null;
 
   // Destructive plot save
   const c1 = parseFloat(document.getElementById('f-count1')?.value) || null;
@@ -944,9 +965,7 @@ function exportSession() {
   const year = currentSession.year;
   const doy = getDOY(date);
   const gpsLat = currentSession.gps?.lat || '';
-  const gpsLng = currentSession.gps?.lng || '';
-
-  // Destructive plots
+  const gpsLng = currentSession.gps?.lng || '';  // Destructive plots
   SPANS.forEach(span => {
     ['A','B'].forEach(ab => {
       const key = `${span}${currentSession.side.charAt(0)}${ab}`;
@@ -962,7 +981,7 @@ function exportSession() {
         d.leaf_dry || '', d.stem_dry || '',
         d.lai ? parseFloat(d.lai).toFixed(6) : '',
         d.agdm ? parseFloat(d.agdm).toFixed(2) : '',
-        gpsLat, gpsLng,
+        d.gps_lat || '', d.gps_lng || '',
         `"${(d.notes || '') + (d.lab_notes ? ' | ' + d.lab_notes : '')}"`
       ].join(','));
     });
