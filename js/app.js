@@ -157,8 +157,9 @@ function calcAvg(prefix, displayId) {
 
 function calcLAI() {
   const la = parseFloat(document.getElementById('lab-leaf-area') ? document.getElementById('lab-leaf-area').value : '');
-  const leafDry = parseFloat(document.getElementById('lab-leaf-dry') ? document.getElementById('lab-leaf-dry').value : '');
-  const stemDry = parseFloat(document.getElementById('lab-stem-dry') ? document.getElementById('lab-stem-dry').value : '');
+  const bagWt = parseFloat(document.getElementById('lab-bag-weight') ? document.getElementById('lab-bag-weight').value : '') || 0;
+  const leafDryRaw = parseFloat(document.getElementById('lab-leaf-dry') ? document.getElementById('lab-leaf-dry').value : '');
+  const stemDryRaw = parseFloat(document.getElementById('lab-stem-dry') ? document.getElementById('lab-stem-dry').value : '');
   const laiEl = document.getElementById('lab-lai');
   const agdmEl = document.getElementById('lab-agdm');
   if (!isNaN(la)) {
@@ -168,8 +169,9 @@ function calcLAI() {
     laiEl.textContent = '\u2014';
     laiEl.classList.remove('has-value');
   }
-  if (!isNaN(leafDry) && !isNaN(stemDry)) {
-    agdmEl.textContent = (leafDry + stemDry).toFixed(2) + ' g/m\u00b2';
+  if (!isNaN(leafDryRaw) && !isNaN(stemDryRaw)) {
+    const agdm = (leafDryRaw - bagWt) + (stemDryRaw - bagWt);
+    agdmEl.textContent = agdm.toFixed(2) + ' g/m\u00b2';
     agdmEl.classList.add('has-value');
   } else {
     agdmEl.textContent = '\u2014';
@@ -341,19 +343,19 @@ function openPlotEntry(key) {
     '<input type="number" inputmode="decimal" id="lab-leaf-area" value="' + (data.leaf_area || '') + '" oninput="calcLAI()"></div>' +
 
     '<div class="field-group"><label>Bag Weight (g)</label>' +
-    '<input type="number" inputmode="decimal" id="lab-bag-weight" value="' + (data.bag_weight || '') + '"></div>' +
+    '<input type="number" inputmode="decimal" id="lab-bag-weight" value="' + (data.bag_weight || '') + '" oninput="calcLAI()"></div>' +
 
     '<div class="form-section-title">WET WEIGHTS</div>' +
     '<div class="field-group"><label>Leaf Wet Weight (g)</label>' +
-    '<input type="number" inputmode="decimal" id="lab-leaf-wet" value="' + (data.leaf_wet || '') + '"></div>' +
+    '<input type="number" inputmode="decimal" id="lab-leaf-wet" value="' + (data.leaf_wet_raw || '') + '"></div>' +
     '<div class="field-group"><label>Stem Wet Weight (g)</label>' +
-    '<input type="number" inputmode="decimal" id="lab-stem-wet" value="' + (data.stem_wet || '') + '"></div>' +
+    '<input type="number" inputmode="decimal" id="lab-stem-wet" value="' + (data.stem_wet_raw || '') + '"></div>' +
 
     '<div class="form-section-title">DRY WEIGHTS</div>' +
     '<div class="field-group"><label>Leaf Dry Weight (g)</label>' +
-    '<input type="number" inputmode="decimal" id="lab-leaf-dry" value="' + (data.leaf_dry || '') + '" oninput="calcLAI()"></div>' +
+    '<input type="number" inputmode="decimal" id="lab-leaf-dry" value="' + (data.leaf_dry_raw || '') + '" oninput="calcLAI()"></div>' +
     '<div class="field-group"><label>Stem Dry Weight (g)</label>' +
-    '<input type="number" inputmode="decimal" id="lab-stem-dry" value="' + (data.stem_dry || '') + '" oninput="calcLAI()"></div>' +
+    '<input type="number" inputmode="decimal" id="lab-stem-dry" value="' + (data.stem_dry_raw || '') + '" oninput="calcLAI()"></div>' +
 
     '<div class="form-section-title">CALCULATED</div>' +
     '<div class="field-group"><label>LAI (auto-calculated)</label>' +
@@ -398,9 +400,19 @@ function saveFieldEntry() {
   const avgH = validH.length ? (validH.reduce(function(a,b){return a+b;},0)/validH.length) : null;
   const avgL = validL.length ? (validL.reduce(function(a,b){return a+b;},0)/validL.length) : null;
 
-  const la      = parseFloat(document.getElementById('lab-leaf-area') ? document.getElementById('lab-leaf-area').value : '') || null;
-  const leafDry = parseFloat(document.getElementById('lab-leaf-dry') ? document.getElementById('lab-leaf-dry').value : '') || null;
-  const stemDry = parseFloat(document.getElementById('lab-stem-dry') ? document.getElementById('lab-stem-dry').value : '') || null;
+  const la       = parseFloat(document.getElementById('lab-leaf-area') ? document.getElementById('lab-leaf-area').value : '') || null;
+  const bagWt    = parseFloat(document.getElementById('lab-bag-weight') ? document.getElementById('lab-bag-weight').value : '') || 0;
+  const leafWetRaw = parseFloat(document.getElementById('lab-leaf-wet') ? document.getElementById('lab-leaf-wet').value : '') || null;
+  const stemWetRaw = parseFloat(document.getElementById('lab-stem-wet') ? document.getElementById('lab-stem-wet').value : '') || null;
+  const leafDryRaw = parseFloat(document.getElementById('lab-leaf-dry') ? document.getElementById('lab-leaf-dry').value : '') || null;
+  const stemDryRaw = parseFloat(document.getElementById('lab-stem-dry') ? document.getElementById('lab-stem-dry').value : '') || null;
+
+  // Subtract bag weight from each measurement
+  const leafWet = leafWetRaw !== null ? leafWetRaw - bagWt : null;
+  const stemWet = stemWetRaw !== null ? stemWetRaw - bagWt : null;
+  const leafDry = leafDryRaw !== null ? leafDryRaw - bagWt : null;
+  const stemDry = stemDryRaw !== null ? stemDryRaw - bagWt : null;
+
   const lai  = la ? la / 15239.96 : null;
   const agdm = (leafDry && stemDry) ? leafDry + stemDry : null;
 
@@ -416,16 +428,17 @@ function saveFieldEntry() {
     avg_leaves: avgL ? avgL.toFixed(1) : null,
     notes: document.getElementById('f-notes') ? document.getElementById('f-notes').value : '',
     field_saved: validH.length > 0 || c1 !== null,
-    leaf_area: la, 
-    bag_weight: parseFloat(document.getElementById('lab-bag-weight') ? document.getElementById('lab-bag-weight').value : '') || null,
+    leaf_area: la,
+    bag_weight: bagWt || null,
     cal_actual: parseFloat(document.getElementById('lab-cal-actual') ? document.getElementById('lab-cal-actual').value : '') || null,
     cal_machine: parseFloat(document.getElementById('lab-cal-machine') ? document.getElementById('lab-cal-machine').value : '') || null,
-    leaf_wet: parseFloat(document.getElementById('lab-leaf-wet') ? document.getElementById('lab-leaf-wet').value : '') || null,
-    stem_wet: parseFloat(document.getElementById('lab-stem-wet') ? document.getElementById('lab-stem-wet').value : '') || null,
+    leaf_wet_raw: leafWetRaw, stem_wet_raw: stemWetRaw,
+    leaf_dry_raw: leafDryRaw, stem_dry_raw: stemDryRaw,
+    leaf_wet: leafWet, stem_wet: stemWet,
     leaf_dry: leafDry, stem_dry: stemDry,
     lai: lai, agdm: agdm,
     lab_notes: document.getElementById('lab-notes') ? document.getElementById('lab-notes').value : '',
-    lab_saved: la !== null || leafDry !== null
+    lab_saved: la !== null || leafDryRaw !== null
   });
 
   saveCurrentSession();
