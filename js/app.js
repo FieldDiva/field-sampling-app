@@ -608,7 +608,7 @@ function exportSession() {
   showToast('Preparing export...');
   const rows = [];
   const header = ['Date','DOY','Plot Name','Growth Stage/#Leaves','Plot Size m2',
-    '# Plants/m2','Plant Height in','Plant Height m','Leaf Area cm2',
+    'Row 1 Count','Row 2 Count','# Plants/m2','Plant Height in','Plant Height m','Leaf Area cm2',
     'Leaf Wet Weight g','Stem Wet Weight g','Leaf Dry Weight g','Stem Dry Weight g',
     'LAI','Above Ground Dry Matter g/m2','GPS Lat','GPS Lng',
     'Cal Card Actual cm2','Cal Machine Reading cm2','Notes'];
@@ -626,7 +626,7 @@ function exportSession() {
       const heightM = d.avg_height ? (parseFloat(d.avg_height) * 0.0254).toFixed(4) : '';
       rows.push([
         date, doy, key,
-        d.avg_leaves || '', 1.524, d.plants_m2 || '',
+        d.avg_leaves || '', 1, d.count1 || '', d.count2 || '', d.plants_m2 || '',
         d.avg_height || '', heightM,
         d.leaf_area || '', d.leaf_wet || '', d.stem_wet || '',
         d.leaf_dry || '', d.stem_dry || '',
@@ -644,7 +644,7 @@ function exportSession() {
       const key = q + '_' + r;
       const d = currentSession.refs[key] || {};
       const heightM = d.avg_height ? (parseFloat(d.avg_height) * 0.0254).toFixed(4) : '';
-      rows.push([date, doy, q+' '+r+'`', d.avg_leaves||'', 1.524, '',
+      rows.push([date, doy, q+' '+r+'`', d.avg_leaves||'', 1, '',
         d.avg_height||'', heightM, '','','','','','','','','',
         '"'+(d.notes||'')+'"'].join(','));
     });
