@@ -607,7 +607,7 @@ function exportSession() {
   if (!currentSession) return;
   showToast('Preparing export...');
   const rows = [];
-  const header = ['Date','Year','DOY','Plot Name','Growth Stage/#Leaves','Plot Size m2',
+  const header = ['Date','DOY','Plot Name','Growth Stage/#Leaves','Plot Size m2',
     '# Plants/m2','Plant Height in','Plant Height m','Leaf Area cm2',
     'Leaf Wet Weight g','Stem Wet Weight g','Leaf Dry Weight g','Stem Dry Weight g',
     'LAI','Above Ground Dry Matter g/m2','GPS Lat','GPS Lng',
@@ -625,7 +625,7 @@ function exportSession() {
       const d = currentSession.plots[key] || {};
       const heightM = d.avg_height ? (parseFloat(d.avg_height) * 0.0254).toFixed(4) : '';
       rows.push([
-        date, year, doy, key,
+        date, doy, key,
         d.avg_leaves || '', 1, d.plants_m2 || '',
         d.avg_height || '', heightM,
         d.leaf_area || '', d.leaf_wet || '', d.stem_wet || '',
@@ -644,20 +644,22 @@ function exportSession() {
       const key = q + '_' + r;
       const d = currentSession.refs[key] || {};
       const heightM = d.avg_height ? (parseFloat(d.avg_height) * 0.0254).toFixed(4) : '';
-      rows.push([date, year, doy, q+' '+r+'`', d.avg_leaves||'', 1, '',
+      rows.push([date, doy, q+' '+r+'`', d.avg_leaves||'', 1, '',
         d.avg_height||'', heightM, '','','','','','','','','',
         '"'+(d.notes||'')+'"'].join(','));
     });
   });
 
-  QUADRANTS.forEach(function(q) {
-    const key = q + '_BOX';
-    const d = currentSession.lys[key] || {};
-    const heightM = d.avg_height ? (parseFloat(d.avg_height) * 0.0254).toFixed(4) : '';
-    rows.push([date, year, doy, q+' BOX', d.avg_leaves||'', '', '',
-      d.avg_height||'', heightM, '','','','','','','','','',
-      '"'+(d.notes||'')+'"'].join(','));
-  });
+  if (currentSession.type === 'Harvest') {
+    QUADRANTS.forEach(function(q) {
+      const key = q + '_BOX';
+      const d = currentSession.lys[key] || {};
+      const heightM = d.avg_height ? (parseFloat(d.avg_height) * 0.0254).toFixed(4) : '';
+      rows.push([date, doy, q+' BOX', d.avg_leaves||'', '', '',
+        d.avg_height||'', heightM, '','','','','','','','','',
+        '"'+(d.notes||'')+'"'].join(','));
+    });
+  }
 
   const csv = rows.join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
