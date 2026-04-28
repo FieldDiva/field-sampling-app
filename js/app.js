@@ -606,36 +606,38 @@ function openSession(id) {
 function exportSession() {
   if (!currentSession) return;
   showToast('Preparing export...');
-  const rows = [];
-  const header = ['Date','DOY','Plot Name','Growth Stage/#Leaves','Plot Size m2',
+
+  const date = currentSession.date;
+  const doy  = getDOY(date);
+  const sideChar = currentSession.side.charAt(0);
+
+  // ---- SHEET 1: Summary ----
+  const summaryHeader = ['Date','DOY','Plot Name','Growth Stage/#Leaves','Plot Size m2',
     'Row 1 Count','Row 2 Count','# Plants/m2','Plant Height in','Plant Height m','Leaf Area cm2',
     'Leaf Wet Weight g','Stem Wet Weight g','Leaf Dry Weight g','Stem Dry Weight g',
     'LAI','Above Ground Dry Matter g/m2','GPS Lat','GPS Lng',
     'Cal Card Actual cm2','Cal Machine Reading cm2','Notes'];
-  rows.push(header.join(','));
-
-  const date = currentSession.date;
-  const year = currentSession.year;
-  const doy  = getDOY(date);
-  const sideChar = currentSession.side.charAt(0);
+  const summaryRows = [summaryHeader];
 
   SPANS.forEach(function(span) {
     ['A','B'].forEach(function(ab) {
       const key = span + sideChar + ab;
       const d = currentSession.plots[key] || {};
-      const heightM = d.avg_height ? (parseFloat(d.avg_height) * 0.0254).toFixed(4) : '';
-      rows.push([
+      const heightM = d.avg_height ? parseFloat((parseFloat(d.avg_height) * 0.0254).toFixed(4)) : '';
+      summaryRows.push([
         date, doy, key,
-        d.avg_leaves || '', 1, d.count1 || '', d.count2 || '', d.plants_m2 || '',
-        d.avg_height || '', heightM,
+        d.avg_leaves ? parseFloat(d.avg_leaves) : '', 1.524,
+        d.count1 || '', d.count2 || '',
+        d.plants_m2 ? parseFloat(d.plants_m2) : '',
+        d.avg_height ? parseFloat(d.avg_height) : '', heightM,
         d.leaf_area || '', d.leaf_wet || '', d.stem_wet || '',
         d.leaf_dry || '', d.stem_dry || '',
-        d.lai ? parseFloat(d.lai).toFixed(6) : '',
-        d.agdm ? parseFloat(d.agdm).toFixed(2) : '',
+        d.lai ? parseFloat(parseFloat(d.lai).toFixed(6)) : '',
+        d.agdm ? parseFloat(parseFloat(d.agdm).toFixed(2)) : '',
         d.gps_lat || '', d.gps_lng || '',
         d.cal_actual || '', d.cal_machine || '',
-        '"' + ((d.notes || '') + (d.lab_notes ? ' | ' + d.lab_notes : '')) + '"'
-      ].join(','));
+        (d.notes || '') + (d.lab_notes ? ' | ' + d.lab_notes : '')
+      ]);
     });
   });
 
@@ -643,10 +645,14 @@ function exportSession() {
     ROWS.forEach(function(r) {
       const key = q + '_' + r;
       const d = currentSession.refs[key] || {};
-      const heightM = d.avg_height ? (parseFloat(d.avg_height) * 0.0254).toFixed(4) : '';
-      rows.push([date, doy, q+' '+r+'`', d.avg_leaves||'', 1, '',
-        d.avg_height||'', heightM, '','','','','','','','','',
-        '"'+(d.notes||'')+'"'].join(','));
+      const heightM = d.avg_height ? parseFloat((parseFloat(d.avg_height) * 0.0254).toFixed(4)) : '';
+      summaryRows.push([
+        date, doy, q+' '+r,
+        d.avg_leaves ? parseFloat(d.avg_leaves) : '', 1.524, '', '', '',
+        d.avg_height ? parseFloat(d.avg_height) : '', heightM,
+        '','','','','','','','','','','',
+        d.notes || ''
+      ]);
     });
   });
 
@@ -654,21 +660,99 @@ function exportSession() {
     QUADRANTS.forEach(function(q) {
       const key = q + '_BOX';
       const d = currentSession.lys[key] || {};
-      const heightM = d.avg_height ? (parseFloat(d.avg_height) * 0.0254).toFixed(4) : '';
-      rows.push([date, doy, q+' BOX', d.avg_leaves||'', '', '',
-        d.avg_height||'', heightM, '','','','','','','','','',
-        '"'+(d.notes||'')+'"'].join(','));
+      const heightM = d.avg_height ? parseFloat((parseFloat(d.avg_height) * 0.0254).toFixed(4)) : '';
+      summaryRows.push([
+        date, doy, q+' BOX',
+        d.avg_leaves ? parseFloat(d.avg_leaves) : '', '', '', '', '',
+        d.avg_height ? parseFloat(d.avg_height) : '', heightM,
+        '','','','','','','','','','','',
+        d.notes || ''
+      ]);
     });
   }
 
-  const csv = rows.join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'field_data_' + currentSession.side + '_' + date + '.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+  // ---- SHEET 2: Individual Plant Readings ----
+  const plantHeader = ['Date','DOY','Plot Name',
+    'H1 in','H2 in','H3 in','H4 in','H5 in','Avg Height in',
+    'L1','L2','L3','L4','L5','Avg Leaves'];
+  const plantRows = [plantHeader];
+
+  SPANS.forEach(function(span) {
+    ['A','B'].forEach(function(ab) {
+      const key = span + sideChar + ab;
+      const d = currentSession.plots[key] || {};
+      plantRows.push([
+        date, doy, key,
+        d.h1 || '', d.h2 || '', d.h3 || '', d.h4 || '', d.h5 || '',
+        d.avg_height ? parseFloat(d.avg_height) : '',
+        d.l1 || '', d.l2 || '', d.l3 || '', d.l4 || '', d.l5 || '',
+        d.avg_leaves ? parseFloat(d.avg_leaves) : ''
+      ]);
+    });
+  });
+
+  QUADRANTS.forEach(function(q) {
+    ROWS.forEach(function(r) {
+      const key = q + '_' + r;
+      const d = currentSession.refs[key] || {};
+      plantRows.push([
+        date, doy, q+' '+r,
+        d.h1 || '', d.h2 || '', d.h3 || '', d.h4 || '', d.h5 || '',
+        d.avg_height ? parseFloat(d.avg_height) : '',
+        d.l1 || '', d.l2 || '', d.l3 || '', d.l4 || '', d.l5 || '',
+        d.avg_leaves ? parseFloat(d.avg_leaves) : ''
+      ]);
+    });
+  });
+
+  QUADRANTS.forEach(function(q) {
+    const key = q + '_BOX';
+    const d = currentSession.lys[key] || {};
+    plantRows.push([
+      date, doy, q+' BOX',
+      d.h1 || '', d.h2 || '', d.h3 || '', d.h4 || '', d.h5 || '',
+      d.avg_height ? parseFloat(d.avg_height) : '',
+      d.l1 || '', d.l2 || '', d.l3 || '', d.l4 || '', d.l5 || '',
+      d.avg_leaves ? parseFloat(d.avg_leaves) : ''
+    ]);
+  });
+
+  // ---- BUILD XLSX using SheetJS ----
+  if (typeof XLSX === 'undefined') {
+    showToast('Loading export library...');
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    script.onload = function() { buildAndDownloadXLSX(summaryRows, plantRows, date); };
+    document.head.appendChild(script);
+  } else {
+    buildAndDownloadXLSX(summaryRows, plantRows, date);
+  }
+}
+
+function buildAndDownloadXLSX(summaryRows, plantRows, date) {
+  const wb = XLSX.utils.book_new();
+
+  const ws1 = XLSX.utils.aoa_to_sheet(summaryRows);
+  // Set column widths for summary sheet
+  ws1['!cols'] = [
+    {wch:12},{wch:5},{wch:10},{wch:10},{wch:10},
+    {wch:10},{wch:10},{wch:10},{wch:14},{wch:14},
+    {wch:14},{wch:16},{wch:16},{wch:16},{wch:16},
+    {wch:10},{wch:20},{wch:12},{wch:12},
+    {wch:18},{wch:22},{wch:30}
+  ];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Summary');
+
+  const ws2 = XLSX.utils.aoa_to_sheet(plantRows);
+  ws2['!cols'] = [
+    {wch:12},{wch:5},{wch:10},
+    {wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:12},
+    {wch:6},{wch:6},{wch:6},{wch:6},{wch:6},{wch:12}
+  ];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Individual Readings');
+
+  const filename = 'field_data_' + currentSession.side + '_' + date + '.xlsx';
+  XLSX.writeFile(wb, filename);
   showToast('Export ready!');
 }
 
