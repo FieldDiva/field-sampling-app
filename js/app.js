@@ -137,7 +137,7 @@ function calcPlantsM2() {
   const c2 = parseFloat(document.getElementById('f-count2').value) || 0;
   const el = document.getElementById('f-plants-m2');
   if (c1 > 0 || c2 > 0) {
-    el.textContent = ((c1 + c2) / 2).toFixed(1) + ' plants/m\u00b2';
+    el.textContent = ((c1 + c2) / 1.524).toFixed(1) + ' plants/m\u00b2';
     el.classList.add('has-value');
   } else {
     el.textContent = '\u2014';
@@ -162,7 +162,7 @@ function calcLAI() {
   const laiEl = document.getElementById('lab-lai');
   const agdmEl = document.getElementById('lab-agdm');
   if (!isNaN(la)) {
-    laiEl.textContent = (la / 10000).toFixed(4);
+    laiEl.textContent = (la / 15239.96).toFixed(4);
     laiEl.classList.add('has-value');
   } else {
     laiEl.textContent = '\u2014';
@@ -389,7 +389,7 @@ function saveFieldEntry() {
 
   const c1 = parseFloat(document.getElementById('f-count1') ? document.getElementById('f-count1').value : '') || null;
   const c2 = parseFloat(document.getElementById('f-count2') ? document.getElementById('f-count2').value : '') || null;
-  const pm2 = (c1 !== null && c2 !== null) ? ((c1 + c2) / 2) : null;
+  const pm2 = (c1 !== null && c2 !== null) ? ((c1 + c2) / 1.524) : null;
 
   const heights = [1,2,3,4,5].map(function(i) { return parseFloat(document.getElementById('f-h'+i) ? document.getElementById('f-h'+i).value : '') || null; });
   const leaves  = [1,2,3,4,5].map(function(i) { return parseFloat(document.getElementById('f-l'+i) ? document.getElementById('f-l'+i).value : '') || null; });
@@ -401,7 +401,7 @@ function saveFieldEntry() {
   const la      = parseFloat(document.getElementById('lab-leaf-area') ? document.getElementById('lab-leaf-area').value : '') || null;
   const leafDry = parseFloat(document.getElementById('lab-leaf-dry') ? document.getElementById('lab-leaf-dry').value : '') || null;
   const stemDry = parseFloat(document.getElementById('lab-stem-dry') ? document.getElementById('lab-stem-dry').value : '') || null;
-  const lai  = la ? la / 10000 : null;
+  const lai  = la ? la / 15239.96 : null;
   const agdm = (leafDry && stemDry) ? leafDry + stemDry : null;
 
   if (!currentSession.plots[currentPlotKey]) currentSession.plots[currentPlotKey] = {};
@@ -626,7 +626,7 @@ function exportSession() {
       const heightM = d.avg_height ? (parseFloat(d.avg_height) * 0.0254).toFixed(4) : '';
       rows.push([
         date, doy, key,
-        d.avg_leaves || '', 1, d.plants_m2 || '',
+        d.avg_leaves || '', 1.524, d.plants_m2 || '',
         d.avg_height || '', heightM,
         d.leaf_area || '', d.leaf_wet || '', d.stem_wet || '',
         d.leaf_dry || '', d.stem_dry || '',
@@ -644,7 +644,7 @@ function exportSession() {
       const key = q + '_' + r;
       const d = currentSession.refs[key] || {};
       const heightM = d.avg_height ? (parseFloat(d.avg_height) * 0.0254).toFixed(4) : '';
-      rows.push([date, doy, q+' '+r+'`', d.avg_leaves||'', 1, '',
+      rows.push([date, doy, q+' '+r+'`', d.avg_leaves||'', 1.524, '',
         d.avg_height||'', heightM, '','','','','','','','','',
         '"'+(d.notes||'')+'"'].join(','));
     });
