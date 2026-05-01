@@ -7,6 +7,7 @@ const LYSIMETER_SPANS = [3, 8];
 const QUADRANTS = ['NE', 'NW', 'SE', 'SW'];
 const ROWS = ['R1', 'R2', 'R3', 'R4'];
 const STABILITY_THRESHOLD = 0.01;
+const LBS_TO_G = 453.592;
 
 let currentSession = null;
 let currentPlotKey = null;
@@ -78,7 +79,7 @@ function startSession() {
     id: Date.now().toString(), date, crop, year,
     side: selectedSide, type: selectedSessionType, tech,
     plots: {}, refs: {}, lys: {}, harvest: {},
-    dryingLog: { dates: [], weights: {} },
+    dryingLog: {},
     bagWeights: {
       ziplock: parseFloat(document.getElementById('bag-ziplock').value)||null,
       purple: parseFloat(document.getElementById('bag-purple').value)||null,
@@ -136,12 +137,51 @@ function calcLAI() {
   else{agdmEl.textContent='\u2014';agdmEl.classList.remove('has-value');}
 }
 
+// Harvest bag weight helpers
+function getBW() { return currentSession.bagWeights || {}; }
+function calcHarvestWeights() {
+  const bw = getBW();
+  const raw = parseFloat(document.getElementById('h-nutrient-wt') ? document.getElementById('h-nutrient-wt').value : '') || null;
+  const bwetRaw = parseFloat(document.getElementById('h-biomass-wet-lbs') ? document.getElementById('h-biomass-wet-lbs').value : '') || null;
+  const bsubRaw = parseFloat(document.getElementById('h-biomass-sub-wet') ? document.getElementById('h-biomass-sub-wet').value : '') || null;
+
+  // Nutrient sample: subtract ziplock
+  const zipG = bw.ziplock || 0;
+  const netNutrient = raw !== null ? raw - zipG : null;
+  const netNutrientEl = document.getElementById('h-nutrient-net');
+  if (netNutrientEl) {
+    if (netNutrient !== null) { netNutrientEl.textContent = netNutrient.toFixed(2) + ' g net'; netNutrientEl.classList.add('has-value'); }
+    else { netNutrientEl.textContent = '\u2014'; netNutrientEl.classList.remove('has-value'); }
+  }
+
+  // Biomass wet: subtract purple + brown paper bag (converted to lbs)
+  const purpleG = bw.purple || 0;
+  const brownG = bw.brownPaper || 0;
+  const totalBagG = purpleG + brownG;
+  const totalBagLbs = totalBagG / LBS_TO_G;
+  const netBWetLbs = bwetRaw !== null ? bwetRaw - totalBagLbs : null;
+  const netBWetG = netBWetLbs !== null ? netBWetLbs * LBS_TO_G : null;
+  const netBWetEl = document.getElementById('h-biomass-wet-net');
+  if (netBWetEl) {
+    if (netBWetLbs !== null) {
+      netBWetEl.textContent = netBWetLbs.toFixed(4) + ' lbs / ' + netBWetG.toFixed(1) + ' g net';
+      netBWetEl.classList.add('has-value');
+    } else { netBWetEl.textContent = '\u2014'; netBWetEl.classList.remove('has-value'); }
+  }
+
+  // Biomass sub wet: subtract purple bag
+  const netBSub = bsubRaw !== null ? bsubRaw - purpleG : null;
+  const netBSubEl = document.getElementById('h-biomass-sub-net');
+  if (netBSubEl) {
+    if (netBSub !== null) { netBSubEl.textContent = netBSub.toFixed(2) + ' g net'; netBSubEl.classList.add('has-value'); }
+    else { netBSubEl.textContent = '\u2014'; netBSubEl.classList.remove('has-value'); }
+  }
+}
+
 function getHarvestBoxKeys() {
-  // East = NE + SE, West = NW + SW
   if (!currentSession) return [];
   return currentSession.side === 'East' ? ['NE_BOX','SE_BOX'] : ['NW_BOX','SW_BOX'];
 }
-
 function getAllHarvestPlotKeys() {
   const sideChar = currentSession.side.charAt(0);
   const keys = [];
@@ -158,98 +198,88 @@ function renderSessionMenu() {
   document.getElementById('session-info-bar').textContent =
     currentSession.crop+' \u00b7 '+currentSession.year+' \u00b7 '+currentSession.type+(currentSession.tech?' \u00b7 '+currentSession.tech:'');
 
-  // Destructive plots
-  const plotList = document.getElementById('plot-list');
-  plotList.innerHTML = '';
-  SPANS.forEach(function(span){
-    ['A','B'].forEach(function(ab){
-      const key=span+sideChar+ab;
-      const data=currentSession.plots[key]||{};
-      const isLys=LYSIMETER_SPANS.indexOf(span)>=0;
-      const item=document.createElement('div');
-      item.className='plot-item'+(isLys?' lysimeter':'');
-      item.innerHTML='<div style="flex:1"><div class="plot-item-name">Span '+span+sideChar+' \u00b7 '+ab+'</div>'+
-        '<div class="plot-item-sub">'+(isLys?'\ud83e\uddea Lysimeter span':'Destructive sample')+'</div></div>'+
-        '<div class="status-dots"><div class="dot'+(data.field_saved?' filled-field':'')+'"></div>'+
-        '<div class="dot'+(data.lab_saved?' filled-lab':'')+'"></div></div>'+
-        '<span style="font-size:20px;color:#bbb">\u203a</span>';
-      item.onclick=(function(k){return function(){openPlotEntry(k);};})(key);
-      plotList.appendChild(item);
-    });
-  });
-
-  // Reference rows
-  const refList=document.getElementById('ref-list');
-  refList.innerHTML='';
-  QUADRANTS.forEach(function(q){
-    ROWS.forEach(function(r){
-      const key=q+'_'+r;
-      const data=currentSession.refs[key]||{};
-      const item=document.createElement('div');
-      item.className='plot-item';
-      item.innerHTML='<div style="flex:1"><div class="plot-item-name">'+q+' \u00b7 '+r+'</div>'+
-        '<div class="plot-item-sub">Reference row</div></div>'+
-        '<div class="status-dots"><div class="dot'+(data.saved?' filled-lab':'')+'"></div></div>'+
-        '<span style="font-size:20px;color:#bbb">\u203a</span>';
-      item.onclick=(function(k,qq,rr){return function(){openRefEntry(k,qq,rr);};})(key,q,r);
-      refList.appendChild(item);
-    });
-  });
-
-  // Lysimeter boxes (weekly height/leaf only)
-  const lysList=document.getElementById('lys-list');
-  lysList.innerHTML='';
-  getHarvestBoxKeys().concat(
-    currentSession.side==='East'?[]:[]
-  );
-  // Show all 4 quadrant boxes for weekly, side-appropriate for harvest
-  const lysKeys = isHarvest ? getHarvestBoxKeys() : QUADRANTS.map(function(q){return q+'_BOX';});
-  lysKeys.forEach(function(key){
-    const q=key.replace('_BOX','');
-    const data=currentSession.lys[key]||{};
-    const item=document.createElement('div');
-    item.className='plot-item lysimeter';
-    item.innerHTML='<div style="flex:1"><div class="plot-item-name">'+q+' Box</div>'+
-      '<div class="plot-item-sub">Height & leaf count</div></div>'+
-      '<div class="status-dots"><div class="dot'+(data.saved?' filled-lab':'')+'"></div></div>'+
-      '<span style="font-size:20px;color:#bbb">\u203a</span>';
-    item.onclick=(function(k,qq){return function(){openLysEntry(k,qq);};})(key,q);
-    lysList.appendChild(item);
-  });
-
-  // Harvest section
-  const harvestSection=document.getElementById('harvest-section');
-  const harvestList=document.getElementById('harvest-list');
   if (isHarvest) {
-    harvestSection.style.display='block';
-    harvestList.innerHTML='';
+    // Harvest: only show harvest data + drying log
+    document.getElementById('weekly-sections').style.display = 'none';
+    document.getElementById('harvest-section').style.display = 'block';
+    const harvestList = document.getElementById('harvest-list');
+    harvestList.innerHTML = '';
     getAllHarvestPlotKeys().forEach(function(key){
-      const data=currentSession.harvest[key]||{};
-      const label=key.indexOf('_BOX')>=0?key.replace('_BOX',' Box'):key;
-      const item=document.createElement('div');
-      item.className='plot-item'+(key.indexOf('_BOX')>=0?' lysimeter':'');
-      item.innerHTML='<div style="flex:1"><div class="plot-item-name">'+label+'</div>'+
+      const data = currentSession.harvest[key] || {};
+      const label = key.indexOf('_BOX')>=0 ? key.replace('_BOX',' Box') : key;
+      const item = document.createElement('div');
+      item.className = 'plot-item' + (key.indexOf('_BOX')>=0?' lysimeter':'');
+      item.innerHTML = '<div style="flex:1"><div class="plot-item-name">'+label+'</div>'+
         '<div class="plot-item-sub">Harvest data</div></div>'+
         '<div class="status-dots"><div class="dot'+(data.saved?' filled-lab':'')+'"></div></div>'+
         '<span style="font-size:20px;color:#bbb">\u203a</span>';
-      item.onclick=(function(k){return function(){openHarvestEntry(k);};})(key);
+      item.onclick = (function(k){return function(){openHarvestEntry(k);};})(key);
       harvestList.appendChild(item);
     });
-    // Drying log button
-    const stable=getDryingStableCount();
-    const total=getAllHarvestPlotKeys().length;
-    const log=currentSession.dryingLog||{dates:[]};
-    const dryBtn=document.createElement('div');
-    dryBtn.className='plot-item';
-    dryBtn.style.background='#fff8e8';
-    dryBtn.style.borderLeft='4px solid #c17f24';
-    dryBtn.innerHTML='<div style="flex:1"><div class="plot-item-name">\ud83d\udcca Drying Log</div>'+
-      '<div class="plot-item-sub">'+log.dates.length+' weigh date(s) \u00b7 '+stable+'/'+total+' stable</div></div>'+
+    // Drying log
+    const stable = getDryingStableCount();
+    const total = getAllHarvestPlotKeys().length;
+    const dryBtn = document.createElement('div');
+    dryBtn.className = 'plot-item';
+    dryBtn.style.background = '#fff8e8';
+    dryBtn.style.borderLeft = '4px solid #c17f24';
+    dryBtn.innerHTML = '<div style="flex:1"><div class="plot-item-name">\ud83d\udcca Drying Log</div>'+
+      '<div class="plot-item-sub">'+stable+'/'+total+' stable</div></div>'+
       '<span style="font-size:20px;color:#bbb">\u203a</span>';
-    dryBtn.onclick=function(){openDryingLog();};
+    dryBtn.onclick = function(){openDryingLog();};
     harvestList.appendChild(dryBtn);
   } else {
-    harvestSection.style.display='none';
+    // Weekly: show all sections
+    document.getElementById('weekly-sections').style.display = 'block';
+    document.getElementById('harvest-section').style.display = 'none';
+    const plotList = document.getElementById('plot-list');
+    plotList.innerHTML = '';
+    SPANS.forEach(function(span){
+      ['A','B'].forEach(function(ab){
+        const key = span+sideChar+ab;
+        const data = currentSession.plots[key]||{};
+        const isLys = LYSIMETER_SPANS.indexOf(span)>=0;
+        const item = document.createElement('div');
+        item.className = 'plot-item'+(isLys?' lysimeter':'');
+        item.innerHTML = '<div style="flex:1"><div class="plot-item-name">Span '+span+sideChar+' \u00b7 '+ab+'</div>'+
+          '<div class="plot-item-sub">'+(isLys?'\ud83e\uddea Lysimeter span':'Destructive sample')+'</div></div>'+
+          '<div class="status-dots"><div class="dot'+(data.field_saved?' filled-field':'')+'"></div>'+
+          '<div class="dot'+(data.lab_saved?' filled-lab':'')+'"></div></div>'+
+          '<span style="font-size:20px;color:#bbb">\u203a</span>';
+        item.onclick = (function(k){return function(){openPlotEntry(k);};})(key);
+        plotList.appendChild(item);
+      });
+    });
+    const refList = document.getElementById('ref-list');
+    refList.innerHTML = '';
+    QUADRANTS.forEach(function(q){
+      ROWS.forEach(function(r){
+        const key = q+'_'+r;
+        const data = currentSession.refs[key]||{};
+        const item = document.createElement('div');
+        item.className = 'plot-item';
+        item.innerHTML = '<div style="flex:1"><div class="plot-item-name">'+q+' \u00b7 '+r+'</div>'+
+          '<div class="plot-item-sub">Reference row</div></div>'+
+          '<div class="status-dots"><div class="dot'+(data.saved?' filled-lab':'')+'"></div></div>'+
+          '<span style="font-size:20px;color:#bbb">\u203a</span>';
+        item.onclick = (function(k,qq,rr){return function(){openRefEntry(k,qq,rr);};})(key,q,r);
+        refList.appendChild(item);
+      });
+    });
+    const lysList = document.getElementById('lys-list');
+    lysList.innerHTML = '';
+    QUADRANTS.forEach(function(q){
+      const key = q+'_BOX';
+      const data = currentSession.lys[key]||{};
+      const item = document.createElement('div');
+      item.className = 'plot-item lysimeter';
+      item.innerHTML = '<div style="flex:1"><div class="plot-item-name">'+q+' Box</div>'+
+        '<div class="plot-item-sub">Height & leaf count</div></div>'+
+        '<div class="status-dots"><div class="dot'+(data.saved?' filled-lab':'')+'"></div></div>'+
+        '<span style="font-size:20px;color:#bbb">\u203a</span>';
+      item.onclick = (function(k,qq){return function(){openLysEntry(k,qq);};})(key,q);
+      lysList.appendChild(item);
+    });
   }
 }
 
@@ -318,12 +348,12 @@ function openPlotEntry(key) {
     '<div class="field-group"><label>Stem Dry Weight (g)</label>'+
     '<input type="number" inputmode="decimal" id="lab-stem-dry" value="'+(data.stem_dry_raw||'')+'" oninput="calcLAI()"></div>'+
     '<div class="form-section-title">CALCULATED</div>'+
-    '<div class="field-group"><label>LAI (auto-calculated)</label>'+
+    '<div class="field-group"><label>LAI</label>'+
     '<div class="calc-field'+(data.lai?' has-value':'')+'" id="lab-lai">'+(data.lai?parseFloat(data.lai).toFixed(4):'\u2014')+'</div></div>'+
     '<div class="field-group"><label>Above Ground Dry Matter (g/m\u00b2)</label>'+
     '<div class="calc-field'+(data.agdm?' has-value':'')+'" id="lab-agdm">'+(data.agdm?parseFloat(data.agdm).toFixed(2)+' g/m\u00b2':'\u2014')+'</div></div>'+
     '<div class="field-group"><label>Lab Notes</label>'+
-    '<textarea id="lab-notes" placeholder="Any issues with this sample...">'+(data.lab_notes||'')+'</textarea></div></div>';
+    '<textarea id="lab-notes" placeholder="Any issues...">'+(data.lab_notes||'')+'</textarea></div></div>';
   document.getElementById('f-count1').addEventListener('input',calcPlantsM2);
   document.getElementById('f-count2').addEventListener('input',calcPlantsM2);
   showScreen('screen-field-entry');
@@ -377,7 +407,6 @@ function saveFieldEntry() {
   saveCurrentSession(); showToast('Saved \u2713'); setTimeout(function(){backToSessionMenu();},800);
 }
 
-// --- REF ROW ---
 function openRefEntry(key,quadrant,row) {
   currentPlotKey=key; currentMode='ref';
   const data=currentSession.refs[key]||{};
@@ -421,7 +450,6 @@ function saveRefEntry() {
   saveCurrentSession(); showToast('Saved \u2713'); setTimeout(function(){backToSessionMenu();},800);
 }
 
-// --- LYSIMETER BOX (weekly height/leaf only) ---
 function openLysEntry(key,quadrant) {
   currentPlotKey=key; currentMode='lys';
   const data=currentSession.lys[key]||{};
@@ -467,152 +495,209 @@ function saveLysEntry() {
 
 // --- HARVEST ENTRY ---
 function openHarvestEntry(key) {
-  currentPlotKey=key;
-  const data=currentSession.harvest[key]||{};
-  const bw=currentSession.bagWeights||{};
-  const label=key.indexOf('_BOX')>=0?key.replace('_BOX',' Box'):key;
-  document.getElementById('harvest-entry-title').textContent=label;
-  document.getElementById('harvest-entry-form').innerHTML=
+  currentPlotKey = key;
+  const data = currentSession.harvest[key] || {};
+  const bw = getBW();
+  const label = key.indexOf('_BOX')>=0 ? key.replace('_BOX',' Box') : key;
+  document.getElementById('harvest-entry-title').textContent = label;
+
+  // Pre-calculate displayed nets from saved raw values
+  const zipG = bw.ziplock || 0;
+  const purpleG = bw.purple || 0;
+  const brownG = bw.brownPaper || 0;
+  const totalBagG = purpleG + brownG;
+  const totalBagLbs = totalBagG / LBS_TO_G;
+
+  const nutrientNet = data.nutrient_wt_raw !== null && data.nutrient_wt_raw !== undefined ? (data.nutrient_wt_raw - zipG).toFixed(2)+' g net' : '\u2014';
+  const bwetNet = data.biomass_wet_lbs_raw !== null && data.biomass_wet_lbs_raw !== undefined ?
+    ((data.biomass_wet_lbs_raw - totalBagLbs).toFixed(4)+' lbs / '+((data.biomass_wet_lbs_raw - totalBagLbs)*LBS_TO_G).toFixed(1)+' g net') : '\u2014';
+  const bsubNet = data.biomass_sub_wet_raw !== null && data.biomass_sub_wet_raw !== undefined ? (data.biomass_sub_wet_raw - purpleG).toFixed(2)+' g net' : '\u2014';
+
+  document.getElementById('harvest-entry-form').innerHTML =
+    '<div class="form-section-title">SESSION BAG WEIGHTS (reference)</div>'+
+    '<div style="background:#f5f5f5;border-radius:8px;padding:10px 14px;font-size:13px;color:#555;display:flex;gap:16px;flex-wrap:wrap;">'+
+    '<span>\ud83d\udcbc Zip Lock: <b>'+(bw.ziplock||'?')+' g</b></span>'+
+    '<span>\ud83d\udfe3 Purple: <b>'+(bw.purple||'?')+' g</b></span>'+
+    '<span>\ud83d\udfe4 Brown Paper: <b>'+(bw.brownPaper||'?')+' g</b></span></div>'+
+
     '<div class="field-group"><label>Plot Length (ft)</label>'+
     '<input type="number" inputmode="decimal" id="h-plot-ft" value="'+(data.plot_ft||'')+'" placeholder="e.g. 60"></div>'+
-    '<div class="field-group"><label>Nutrient Sample Weight (g)</label>'+
-    '<input type="number" inputmode="decimal" id="h-nutrient-wt" value="'+(data.nutrient_wt||'')+'"></div>'+
-    '<div class="field-group"><label>Biomass Wet Weight (lbs)</label>'+
-    '<input type="number" inputmode="decimal" id="h-biomass-wet-lbs" value="'+(data.biomass_wet_lbs||'')+'"></div>'+
-    '<div class="field-group"><label>Biomass Sub Wet Weight (g) <span style="font-size:11px;color:#999;">purple bag subtracted</span></label>'+
-    '<input type="number" inputmode="decimal" id="h-biomass-sub-wet" value="'+(data.biomass_sub_wet||'')+'"></div>'+
-    '<div class="form-section-title">BAG WEIGHTS (session reference)</div>'+
-    '<div class="field-group"><label>Zip Lock Bag Weight (g)</label>'+
-    '<div class="calc-field has-value">'+(bw.ziplock||'\u2014')+'</div></div>'+
-    '<div class="field-group"><label>Purple Bag Weight (g)</label>'+
-    '<div class="calc-field has-value">'+(bw.purple||'\u2014')+'</div></div>'+
-    '<div class="field-group"><label>Brown Paper Bag Avg Weight (g)</label>'+
-    '<div class="calc-field has-value">'+(bw.brownPaper||'\u2014')+'</div></div>'+
+
+    '<div class="form-section-title">NUTRIENT SAMPLE</div>'+
+    '<div class="field-group"><label>Nutrient Sample Weight (g) <span style="font-size:11px;color:#999;">zip lock subtracted by app</span></label>'+
+    '<input type="number" inputmode="decimal" id="h-nutrient-wt" value="'+(data.nutrient_wt_raw||'')+'" oninput="calcHarvestWeights()" placeholder="Raw weight with bag"></div>'+
+    '<div class="field-group"><label>Net Nutrient Weight</label>'+
+    '<div class="calc-field'+(data.nutrient_wt_raw!==undefined?' has-value':'')+'" id="h-nutrient-net">'+nutrientNet+'</div></div>'+
+
+    '<div class="form-section-title">BIOMASS WET</div>'+
+    '<div class="field-group"><label>Biomass Wet Weight (lbs) <span style="font-size:11px;color:#999;">purple + brown bag subtracted by app</span></label>'+
+    '<input type="number" inputmode="decimal" id="h-biomass-wet-lbs" value="'+(data.biomass_wet_lbs_raw||'')+'" oninput="calcHarvestWeights()" placeholder="Raw weight with bags"></div>'+
+    '<div class="field-group"><label>Net Biomass Wet Weight</label>'+
+    '<div class="calc-field'+(data.biomass_wet_lbs_raw!==undefined?' has-value':'')+'" id="h-biomass-wet-net">'+bwetNet+'</div></div>'+
+
+    '<div class="form-section-title">BIOMASS SUB WET</div>'+
+    '<div class="field-group"><label>Biomass Sub Wet Weight (g) <span style="font-size:11px;color:#999;">purple bag subtracted by app</span></label>'+
+    '<input type="number" inputmode="decimal" id="h-biomass-sub-wet" value="'+(data.biomass_sub_wet_raw||'')+'" oninput="calcHarvestWeights()" placeholder="Raw weight with purple bag"></div>'+
+    '<div class="field-group"><label>Net Biomass Sub Wet Weight</label>'+
+    '<div class="calc-field'+(data.biomass_sub_wet_raw!==undefined?' has-value':'')+'" id="h-biomass-sub-net">'+bsubNet+'</div></div>'+
+
     '<div class="field-group"><label>Notes</label>'+
     '<textarea id="h-notes" placeholder="Any observations...">'+(data.notes||'')+'</textarea></div>';
+
   showScreen('screen-harvest-entry');
 }
+
 function saveHarvestEntry() {
-  if (!currentSession.harvest[currentPlotKey]) currentSession.harvest[currentPlotKey]={};
-  Object.assign(currentSession.harvest[currentPlotKey],{
-    plot_ft:parseFloat(document.getElementById('h-plot-ft').value)||null,
-    nutrient_wt:parseFloat(document.getElementById('h-nutrient-wt').value)||null,
-    biomass_wet_lbs:parseFloat(document.getElementById('h-biomass-wet-lbs').value)||null,
-    biomass_sub_wet:parseFloat(document.getElementById('h-biomass-sub-wet').value)||null,
-    notes:document.getElementById('h-notes').value||'',
-    saved:true
+  const bw = getBW();
+  const zipG = bw.ziplock || 0;
+  const purpleG = bw.purple || 0;
+  const brownG = bw.brownPaper || 0;
+  const totalBagG = purpleG + brownG;
+  const totalBagLbs = totalBagG / LBS_TO_G;
+
+  const nutRaw = parseFloat(document.getElementById('h-nutrient-wt').value) || null;
+  const bwetRaw = parseFloat(document.getElementById('h-biomass-wet-lbs').value) || null;
+  const bsubRaw = parseFloat(document.getElementById('h-biomass-sub-wet').value) || null;
+
+  if (!currentSession.harvest[currentPlotKey]) currentSession.harvest[currentPlotKey] = {};
+  Object.assign(currentSession.harvest[currentPlotKey], {
+    plot_ft: parseFloat(document.getElementById('h-plot-ft').value) || null,
+    nutrient_wt_raw: nutRaw,
+    nutrient_wt_net: nutRaw !== null ? nutRaw - zipG : null,
+    biomass_wet_lbs_raw: bwetRaw,
+    biomass_wet_lbs_net: bwetRaw !== null ? bwetRaw - totalBagLbs : null,
+    biomass_wet_g_net: bwetRaw !== null ? (bwetRaw - totalBagLbs) * LBS_TO_G : null,
+    biomass_sub_wet_raw: bsubRaw,
+    biomass_sub_wet_net: bsubRaw !== null ? bsubRaw - purpleG : null,
+    notes: document.getElementById('h-notes').value || '',
+    saved: true
   });
   saveCurrentSession(); showToast('Saved \u2713'); setTimeout(function(){backToSessionMenu();},800);
 }
 
 // --- DRYING LOG ---
 function isPlotStable(key) {
-  const log=currentSession.dryingLog;
-  if (!log||log.dates.length<2) return false;
-  const weights=log.weights[key]||{};
-  const last=log.dates.slice(-2);
-  const w1=parseFloat(weights[last[0]]);
-  const w2=parseFloat(weights[last[1]]);
-  if (isNaN(w1)||isNaN(w2)||w1===0) return false;
-  return Math.abs(w2-w1)/w1<=STABILITY_THRESHOLD;
+  const log = currentSession.dryingLog || {};
+  const entries = log[key] || [];
+  const filled = entries.filter(function(e){return e.net !== null && e.net !== undefined;});
+  if (filled.length < 2) return false;
+  const last2 = filled.slice(-2);
+  const w1 = last2[0].net, w2 = last2[1].net;
+  if (!w1 || w1 === 0) return false;
+  return Math.abs(w2 - w1) / w1 <= STABILITY_THRESHOLD;
 }
 function getDryingStableCount() {
-  if (!currentSession||!currentSession.dryingLog) return 0;
-  if (currentSession.dryingLog.dates.length<2) return 0;
+  if (!currentSession) return 0;
   return getAllHarvestPlotKeys().filter(function(k){return isPlotStable(k);}).length;
 }
 function getFinalDryWeight(key) {
-  const log=currentSession.dryingLog;
-  if (!log||!log.dates.length) return null;
-  const weights=log.weights[key]||{};
-  return weights[log.dates[log.dates.length-1]]||null;
+  const log = currentSession.dryingLog || {};
+  const entries = log[key] || [];
+  const filled = entries.filter(function(e){return e.net !== null && e.net !== undefined;});
+  if (!filled.length) return null;
+  return filled[filled.length-1].net;
 }
+
 function openDryingLog() {
-  if (!currentSession.dryingLog) currentSession.dryingLog={dates:[],weights:{}};
-  document.getElementById('drying-info-bar').textContent=
+  if (!currentSession.dryingLog) currentSession.dryingLog = {};
+  // Initialize entries for all plots if not exists
+  getAllHarvestPlotKeys().forEach(function(key){
+    if (!currentSession.dryingLog[key]) {
+      currentSession.dryingLog[key] = Array(10).fill(null).map(function(){return {date:'',raw:null,net:null};});
+    }
+    // Ensure always 10 slots
+    while (currentSession.dryingLog[key].length < 10) {
+      currentSession.dryingLog[key].push({date:'',raw:null,net:null});
+    }
+  });
+  document.getElementById('drying-info-bar').textContent =
     currentSession.date+' \u00b7 '+currentSession.side+' \u00b7 '+currentSession.crop;
   renderDryingLog();
   showScreen('screen-drying-log');
 }
+
 function renderDryingLog() {
-  const log=currentSession.dryingLog;
-  const keys=getAllHarvestPlotKeys();
-  const content=document.getElementById('drying-log-content');
-  if (!log.dates.length) {
-    content.innerHTML='<div style="padding:32px;text-align:center;color:#999;">'+
-      '<div style="font-size:48px;margin-bottom:12px;">\u2696\ufe0f</div>'+
-      '<div style="font-size:16px;font-weight:600;">No weigh dates yet</div>'+
-      '<div style="font-size:14px;margin-top:8px;">Tap + Add Weigh Date to start tracking</div></div>';
-    return;
-  }
-  const stable=getDryingStableCount();
-  const total=keys.length;
-  const allStable=stable===total;
-  let html='<div style="margin:12px 16px;padding:12px 16px;border-radius:10px;background:'+
+  const keys = getAllHarvestPlotKeys();
+  const bw = getBW();
+  const purpleG = bw.purple || 0;
+  const brownG = bw.brownPaper || 0;
+  const totalBagG = purpleG + brownG;
+  const stable = getDryingStableCount();
+  const total = keys.length;
+  const allStable = stable === total;
+  const content = document.getElementById('drying-log-content');
+
+  let html = '<div style="margin:12px 16px;padding:12px 16px;border-radius:10px;background:'+
     (allStable?'#e8f5e8':'#fff8e8')+';border:1.5px solid '+(allStable?'#c3e6c3':'#f0c060')+';">'+
     '<div style="font-weight:700;font-size:15px;color:'+(allStable?'#2d6a2d':'#c17f24')+';">'+
     (allStable?'\u2705 All samples stable!':'\ud83d\udd04 '+stable+' of '+total+' samples stable')+'</div>'+
-    '<div style="font-size:12px;color:#777;margin-top:2px;">Threshold: \u22641% change between last two weighings</div></div>';
-  html+='<div style="overflow-x:auto;padding:0 16px 16px;"><table style="width:100%;border-collapse:collapse;font-size:13px;">';
-  html+='<thead><tr style="background:#f5f5f5;"><th style="padding:8px 6px;text-align:left;font-weight:700;border-bottom:2px solid #ddd;white-space:nowrap;">Plot</th>';
-  log.dates.forEach(function(d){html+='<th style="padding:8px 6px;text-align:center;font-weight:700;border-bottom:2px solid #ddd;white-space:nowrap;">'+d+'</th>';});
-  if (log.dates.length>=2) {
-    html+='<th style="padding:8px 6px;text-align:center;font-weight:700;border-bottom:2px solid #ddd;">% Chg</th>';
-    html+='<th style="padding:8px 6px;text-align:center;font-weight:700;border-bottom:2px solid #ddd;">Status</th>';
-  }
-  html+='</tr></thead><tbody>';
-  keys.forEach(function(key,idx){
-    const label=key.indexOf('_BOX')>=0?key.replace('_BOX',' Box'):key;
-    const weights=log.weights[key]||{};
-    const stable=isPlotStable(key);
-    html+='<tr style="background:'+(idx%2===0?'#fff':'#fafafa')+'">';
-    html+='<td style="padding:8px 6px;font-weight:600;white-space:nowrap;">'+label+'</td>';
-    log.dates.forEach(function(d){
-      html+='<td style="padding:4px 2px;text-align:center;">'+
-        '<input type="number" inputmode="decimal" '+
-        'style="width:64px;text-align:center;padding:4px;border:1.5px solid #ddd;border-radius:6px;font-size:13px;" '+
-        'value="'+(weights[d]||'')+'" '+
-        'onchange="updateDryWeight(\''+key+'\',\''+d+'\',this.value)"></td>';
+    '<div style="font-size:12px;color:#777;margin-top:2px;">Bags subtracted: purple ('+purpleG+'g) + brown ('+brownG+'g) = '+totalBagG+'g total</div>'+
+    '<div style="font-size:12px;color:#777;">Threshold: \u22641% change between last two weighings</div></div>';
+
+  keys.forEach(function(key){
+    const label = key.indexOf('_BOX')>=0 ? key.replace('_BOX',' Box') : key;
+    const entries = (currentSession.dryingLog[key] || []);
+    const plotStable = isPlotStable(key);
+
+    html += '<div style="margin:0 16px 16px;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.08);overflow:hidden;">'+
+      '<div style="padding:12px 14px;background:'+(plotStable?'#e8f5e8':'#f5f5f5')+';display:flex;justify-content:space-between;align-items:center;">'+
+      '<span style="font-weight:700;font-size:15px;">'+label+'</span>'+
+      '<span style="font-size:18px;">'+(plotStable?'\u2705':'\ud83d\udd04')+'</span></div>';
+
+    entries.forEach(function(entry,idx){
+      const filled = entry.raw !== null && entry.raw !== undefined && entry.raw !== '';
+      const net = filled ? (parseFloat(entry.raw) - totalBagG) : null;
+      // Calculate % change from previous filled entry
+      let pctHtml = '';
+      if (filled && idx > 0) {
+        const prevFilled = entries.slice(0,idx).filter(function(e){return e.raw!==null&&e.raw!==undefined&&e.raw!=='';});
+        if (prevFilled.length > 0) {
+          const prevNet = parseFloat(prevFilled[prevFilled.length-1].raw) - totalBagG;
+          if (prevNet > 0) {
+            const pct = Math.abs(net - prevNet) / prevNet * 100;
+            const isStable = pct <= 1;
+            pctHtml = '<span style="font-size:12px;font-weight:600;color:'+(isStable?'#2d6a2d':'#c17f24')+';">'+pct.toFixed(2)+'% '+(isStable?'\u2705':'\ud83d\udd04')+'</span>';
+          }
+        }
+      }
+      html += '<div style="padding:10px 14px;border-top:1px solid #f0f0f0;display:grid;grid-template-columns:140px 1fr 1fr;gap:8px;align-items:center;">'+
+        '<input type="date" style="border:1.5px solid #e0e0e0;border-radius:6px;padding:6px 8px;font-size:13px;width:100%;" '+
+        'value="'+(entry.date||'')+'" onchange="updateDryDate(\''+key+'\','+idx+',this.value)">'+
+        '<div style="display:flex;flex-direction:column;gap:2px;">'+
+        '<input type="number" inputmode="decimal" style="border:1.5px solid #e0e0e0;border-radius:6px;padding:6px 8px;font-size:14px;width:100%;" '+
+        'placeholder="Raw wt (g)" value="'+(entry.raw!==null&&entry.raw!==undefined?entry.raw:'')+'" '+
+        'onchange="updateDryWeight(\''+key+'\','+idx+',this.value)">'+
+        (filled?'<span style="font-size:11px;color:#2d6a2d;font-weight:600;padding-left:4px;">Net: '+(net.toFixed(2))+'g</span>':'')+'</div>'+
+        '<div style="font-size:12px;color:#777;">'+pctHtml+'</div></div>';
     });
-    if (log.dates.length>=2) {
-      const last=log.dates.slice(-2);
-      const w1=parseFloat(weights[last[0]]);
-      const w2=parseFloat(weights[last[1]]);
-      let pct='\u2014';
-      if (!isNaN(w1)&&!isNaN(w2)&&w1>0) pct=(Math.abs(w2-w1)/w1*100).toFixed(2)+'%';
-      html+='<td style="padding:8px 6px;text-align:center;color:#555;">'+pct+'</td>';
-      html+='<td style="padding:8px 6px;text-align:center;">'+(stable?'\u2705':'\ud83d\udd04')+'</td>';
-    }
-    html+='</tr>';
+    html += '</div>';
   });
-  html+='</tbody></table></div>';
-  content.innerHTML=html;
+  content.innerHTML = html;
 }
-function updateDryWeight(key,date,value) {
-  if (!currentSession.dryingLog.weights[key]) currentSession.dryingLog.weights[key]={};
-  currentSession.dryingLog.weights[key][date]=value?parseFloat(value):null;
+
+function updateDryDate(key, idx, value) {
+  if (!currentSession.dryingLog[key]) return;
+  currentSession.dryingLog[key][idx].date = value;
+  saveCurrentSession();
+}
+function updateDryWeight(key, idx, value) {
+  if (!currentSession.dryingLog[key]) return;
+  const raw = value ? parseFloat(value) : null;
+  const bw = getBW();
+  const totalBagG = (bw.purple||0) + (bw.brownPaper||0);
+  currentSession.dryingLog[key][idx].raw = raw;
+  currentSession.dryingLog[key][idx].net = raw !== null ? raw - totalBagG : null;
   saveCurrentSession();
   renderDryingLog();
-}
-function addDryingDate() {
-  const date=prompt('Enter weigh date (YYYY-MM-DD):');
-  if (!date) return;
-  if (!currentSession.dryingLog) currentSession.dryingLog={dates:[],weights:{}};
-  if (currentSession.dryingLog.dates.indexOf(date)>=0){showToast('Date already exists');return;}
-  currentSession.dryingLog.dates.push(date);
-  currentSession.dryingLog.dates.sort();
-  saveCurrentSession();
-  renderDryingLog();
-  showToast('Added '+date);
 }
 
 // --- SESSIONS LIST ---
 function renderSessionsList() {
-  const sessions=getSessions();
-  const list=document.getElementById('sessions-list');
-  const all=Object.values(sessions).sort(function(a,b){return b.id-a.id;});
+  const sessions = getSessions();
+  const list = document.getElementById('sessions-list');
+  const all = Object.values(sessions).sort(function(a,b){return b.id-a.id;});
   if (!all.length){list.innerHTML='<p style="color:#999;text-align:center;padding:40px;">No sessions yet</p>';return;}
-  list.innerHTML=all.map(function(s){
+  list.innerHTML = all.map(function(s){
     return '<div class="session-card">'+
       '<div class="session-card-info" onclick="openSession(\''+s.id+'\')" style="flex:1;cursor:pointer;">'+
       '<h3>'+s.date+' \u00b7 '+s.side+'</h3><p>'+s.crop+' \u00b7 '+s.year+' \u00b7 '+s.type+'</p></div>'+
@@ -628,7 +713,7 @@ function openSession(id) {
   const s=getSessions(); currentSession=s[id];
   selectedSide=currentSession.side; selectedSessionType=currentSession.type;
   if (!currentSession.harvest) currentSession.harvest={};
-  if (!currentSession.dryingLog) currentSession.dryingLog={dates:[],weights:{}};
+  if (!currentSession.dryingLog) currentSession.dryingLog={};
   if (!currentSession.bagWeights) currentSession.bagWeights={};
   showScreen('screen-session-menu'); renderSessionMenu();
 }
@@ -637,10 +722,10 @@ function openSession(id) {
 function exportSession() {
   if (!currentSession) return;
   showToast('Preparing export...');
-  const date=currentSession.date;
-  const doy=getDOY(date);
+  const date=currentSession.date, doy=getDOY(date);
   const sideChar=currentSession.side.charAt(0);
   const isHarvest=currentSession.type==='Harvest';
+  const bw=getBW();
 
   // Sheet 1: Summary
   const summaryHeader=['Date','DOY','Plot Name','Growth Stage/#Leaves','Plot Size m2',
@@ -649,122 +734,87 @@ function exportSession() {
     'LAI','Above Ground Dry Matter g/m2','GPS Lat','GPS Lng',
     'Cal Card Actual cm2','Cal Machine Reading cm2','Notes'];
   const summaryRows=[summaryHeader];
-  SPANS.forEach(function(span){
-    ['A','B'].forEach(function(ab){
-      const key=span+sideChar+ab;
-      const d=currentSession.plots[key]||{};
-      const hm=d.avg_height?parseFloat((parseFloat(d.avg_height)*0.0254).toFixed(4)):'';
-      summaryRows.push([date,doy,key,
-        d.avg_leaves?parseFloat(d.avg_leaves):'',1.524,
-        d.count1||'',d.count2||'',d.plants_m2?parseFloat(d.plants_m2):'',
-        d.avg_height?parseFloat(d.avg_height):'',hm,
-        d.leaf_area||'',d.leaf_wet||'',d.stem_wet||'',
-        d.leaf_dry||'',d.stem_dry||'',
-        d.lai?parseFloat(parseFloat(d.lai).toFixed(6)):'',
-        d.agdm?parseFloat(parseFloat(d.agdm).toFixed(2)):'',
-        d.gps_lat||'',d.gps_lng||'',
-        d.cal_actual||'',d.cal_machine||'',
-        (d.notes||'')+(d.lab_notes?' | '+d.lab_notes:'')
-      ]);
-    });
-  });
-  QUADRANTS.forEach(function(q){
-    ROWS.forEach(function(r){
-      const key=q+'_'+r;
-      const d=currentSession.refs[key]||{};
-      const hm=d.avg_height?parseFloat((parseFloat(d.avg_height)*0.0254).toFixed(4)):'';
-      summaryRows.push([date,doy,q+' '+r,
-        d.avg_leaves?parseFloat(d.avg_leaves):'',1.524,'','','',
-        d.avg_height?parseFloat(d.avg_height):'',hm,
-        '','','','','','','','','','','',d.notes||'']);
-    });
-  });
-  // Lysimeter boxes in summary (weekly height/leaf)
-  const lysKeys=isHarvest?getHarvestBoxKeys():QUADRANTS.map(function(q){return q+'_BOX';});
-  lysKeys.forEach(function(key){
-    const q=key.replace('_BOX','');
-    const d=currentSession.lys[key]||{};
-    const hm=d.avg_height?parseFloat((parseFloat(d.avg_height)*0.0254).toFixed(4)):'';
-    summaryRows.push([date,doy,q+' BOX',
-      d.avg_leaves?parseFloat(d.avg_leaves):'','','','','',
-      d.avg_height?parseFloat(d.avg_height):'',hm,
-      '','','','','','','','','','','',d.notes||'']);
-  });
-
-  // Sheet 2: Individual readings
-  const plantHeader=['Date','DOY','Plot Name',
-    'H1 in','H2 in','H3 in','H4 in','H5 in','Avg Height in',
-    'L1','L2','L3','L4','L5','Avg Leaves'];
-  const plantRows=[plantHeader];
   SPANS.forEach(function(span){['A','B'].forEach(function(ab){
-    const key=span+sideChar+ab;
-    const d=currentSession.plots[key]||{};
-    plantRows.push([date,doy,key,
-      d.h1||'',d.h2||'',d.h3||'',d.h4||'',d.h5||'',
-      d.avg_height?parseFloat(d.avg_height):'',
-      d.l1||'',d.l2||'',d.l3||'',d.l4||'',d.l5||'',
-      d.avg_leaves?parseFloat(d.avg_leaves):''
+    const key=span+sideChar+ab, d=currentSession.plots[key]||{};
+    const hm=d.avg_height?parseFloat((parseFloat(d.avg_height)*0.0254).toFixed(4)):'';
+    summaryRows.push([date,doy,key,
+      d.avg_leaves?parseFloat(d.avg_leaves):'',1.524,
+      d.count1||'',d.count2||'',d.plants_m2?parseFloat(d.plants_m2):'',
+      d.avg_height?parseFloat(d.avg_height):'',hm,
+      d.leaf_area||'',d.leaf_wet||'',d.stem_wet||'',
+      d.leaf_dry||'',d.stem_dry||'',
+      d.lai?parseFloat(parseFloat(d.lai).toFixed(6)):'',
+      d.agdm?parseFloat(parseFloat(d.agdm).toFixed(2)):'',
+      d.gps_lat||'',d.gps_lng||'',
+      d.cal_actual||'',d.cal_machine||'',
+      (d.notes||'')+(d.lab_notes?' | '+d.lab_notes:'')
     ]);
   });});
   QUADRANTS.forEach(function(q){ROWS.forEach(function(r){
-    const key=q+'_'+r; const d=currentSession.refs[key]||{};
-    plantRows.push([date,doy,q+' '+r,
-      d.h1||'',d.h2||'',d.h3||'',d.h4||'',d.h5||'',
-      d.avg_height?parseFloat(d.avg_height):'',
-      d.l1||'',d.l2||'',d.l3||'',d.l4||'',d.l5||'',
-      d.avg_leaves?parseFloat(d.avg_leaves):''
-    ]);
+    const key=q+'_'+r, d=currentSession.refs[key]||{};
+    const hm=d.avg_height?parseFloat((parseFloat(d.avg_height)*0.0254).toFixed(4)):'';
+    summaryRows.push([date,doy,q+' '+r,d.avg_leaves?parseFloat(d.avg_leaves):'',1.524,'','','',
+      d.avg_height?parseFloat(d.avg_height):'',hm,'','','','','','','','','','','',d.notes||'']);
   });});
-  lysKeys.forEach(function(key){
-    const q=key.replace('_BOX',''); const d=currentSession.lys[key]||{};
-    plantRows.push([date,doy,q+' BOX',
-      d.h1||'',d.h2||'',d.h3||'',d.h4||'',d.h5||'',
-      d.avg_height?parseFloat(d.avg_height):'',
-      d.l1||'',d.l2||'',d.l3||'',d.l4||'',d.l5||'',
-      d.avg_leaves?parseFloat(d.avg_leaves):''
-    ]);
-  });
 
-  // Sheets 3 & 4: Harvest only
+  // Sheet 2: Individual readings
+  const plantHeader=['Date','DOY','Plot Name','H1 in','H2 in','H3 in','H4 in','H5 in','Avg Height in','L1','L2','L3','L4','L5','Avg Leaves'];
+  const plantRows=[plantHeader];
+  SPANS.forEach(function(span){['A','B'].forEach(function(ab){
+    const key=span+sideChar+ab, d=currentSession.plots[key]||{};
+    plantRows.push([date,doy,key,d.h1||'',d.h2||'',d.h3||'',d.h4||'',d.h5||'',
+      d.avg_height?parseFloat(d.avg_height):'',d.l1||'',d.l2||'',d.l3||'',d.l4||'',d.l5||'',
+      d.avg_leaves?parseFloat(d.avg_leaves):'']);
+  });});
+  QUADRANTS.forEach(function(q){ROWS.forEach(function(r){
+    const key=q+'_'+r, d=currentSession.refs[key]||{};
+    plantRows.push([date,doy,q+' '+r,d.h1||'',d.h2||'',d.h3||'',d.h4||'',d.h5||'',
+      d.avg_height?parseFloat(d.avg_height):'',d.l1||'',d.l2||'',d.l3||'',d.l4||'',d.l5||'',
+      d.avg_leaves?parseFloat(d.avg_leaves):'']);
+  });});
+
+  // Sheets 3 & 4: Harvest
   let harvestRows=null, dryingRows=null;
   if (isHarvest) {
-    const bw=currentSession.bagWeights||{};
-    const harvestHeader=['Plot Name','Plot Ft','Nutrient Sample Wt g',
-      'Biomass Wet Wt lbs','Biomass Sub Wet Wt g (purple bag subtracted)',
-      'Zip Lock Bag Wt g','Purple Bag Wt g','Brown Paper Bag Avg Wt g',
-      'Biomass Sub Dry Wt g Final','Notes'];
+    const harvestHeader=['Plot Name','Plot Ft',
+      'Nutrient Wt Raw (g)','Nutrient Wt Net (g, -ziplock)',
+      'Biomass Wet Raw (lbs)','Biomass Wet Net (lbs)','Biomass Wet Net (g)',
+      'Biomass Sub Wet Raw (g)','Biomass Sub Wet Net (g, -purple)',
+      'Zip Lock Bag (g)','Purple Bag (g)','Brown Paper Bag (g)',
+      'Biomass Sub Dry Wt Final (g)','Notes'];
     harvestRows=[harvestHeader];
     getAllHarvestPlotKeys().forEach(function(key){
       const h=currentSession.harvest[key]||{};
       const label=key.indexOf('_BOX')>=0?key.replace('_BOX',' Box'):key;
-      harvestRows.push([label,
-        h.plot_ft||'',h.nutrient_wt||'',h.biomass_wet_lbs||'',h.biomass_sub_wet||'',
+      harvestRows.push([label,h.plot_ft||'',
+        h.nutrient_wt_raw||'',h.nutrient_wt_net!==null&&h.nutrient_wt_net!==undefined?h.nutrient_wt_net.toFixed(2):'',
+        h.biomass_wet_lbs_raw||'',
+        h.biomass_wet_lbs_net!==null&&h.biomass_wet_lbs_net!==undefined?h.biomass_wet_lbs_net.toFixed(4):'',
+        h.biomass_wet_g_net!==null&&h.biomass_wet_g_net!==undefined?h.biomass_wet_g_net.toFixed(1):'',
+        h.biomass_sub_wet_raw||'',
+        h.biomass_sub_wet_net!==null&&h.biomass_sub_wet_net!==undefined?h.biomass_sub_wet_net.toFixed(2):'',
         bw.ziplock||'',bw.purple||'',bw.brownPaper||'',
         getFinalDryWeight(key)||'',h.notes||''
       ]);
     });
 
-    const log=currentSession.dryingLog||{dates:[],weights:{}};
-    if (log.dates.length) {
-      const dryingHeader=['Plot Name'].concat(log.dates).concat(['% Last Change','Stable?','Final Dry Wt g']);
-      dryingRows=[dryingHeader];
-      getAllHarvestPlotKeys().forEach(function(key){
-        const label=key.indexOf('_BOX')>=0?key.replace('_BOX',' Box'):key;
-        const weights=log.weights[key]||{};
-        const vals=log.dates.map(function(d){return weights[d]||'';});
-        let pct='',stab='';
-        if (log.dates.length>=2){
-          const last=log.dates.slice(-2);
-          const w1=parseFloat(weights[last[0]]);
-          const w2=parseFloat(weights[last[1]]);
-          if (!isNaN(w1)&&!isNaN(w2)&&w1>0){
-            pct=(Math.abs(w2-w1)/w1*100).toFixed(2)+'%';
-            stab=Math.abs(w2-w1)/w1<=STABILITY_THRESHOLD?'Yes':'No';
-          }
+    // Drying log sheet
+    const totalBagG=(bw.purple||0)+(bw.brownPaper||0);
+    const dryingHeader=['Plot Name','Weigh #','Date','Raw Weight (g)','Net Weight (g)','% Change','Stable?'];
+    dryingRows=[dryingHeader];
+    getAllHarvestPlotKeys().forEach(function(key){
+      const label=key.indexOf('_BOX')>=0?key.replace('_BOX',' Box'):key;
+      const entries=(currentSession.dryingLog[key]||[]).filter(function(e){return e.raw!==null&&e.raw!==undefined&&e.raw!=='';});
+      entries.forEach(function(entry,idx){
+        const net=parseFloat(entry.raw)-totalBagG;
+        let pct='', stab='';
+        if (idx>0) {
+          const prevNet=parseFloat(entries[idx-1].raw)-totalBagG;
+          if (prevNet>0){pct=(Math.abs(net-prevNet)/prevNet*100).toFixed(2)+'%';stab=Math.abs(net-prevNet)/prevNet<=STABILITY_THRESHOLD?'Yes':'No';}
         }
-        dryingRows.push([label].concat(vals).concat([pct,stab,getFinalDryWeight(key)||'']));
+        dryingRows.push([label,idx+1,entry.date||'',parseFloat(entry.raw),net.toFixed(2),pct,stab]);
       });
-    }
+    });
   }
 
   if (typeof XLSX==='undefined') {
@@ -773,18 +823,14 @@ function exportSession() {
     script.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
     script.onload=function(){buildXLSX(summaryRows,plantRows,harvestRows,dryingRows,date);};
     document.head.appendChild(script);
-  } else {
-    buildXLSX(summaryRows,plantRows,harvestRows,dryingRows,date);
-  }
+  } else { buildXLSX(summaryRows,plantRows,harvestRows,dryingRows,date); }
 }
 function buildXLSX(summaryRows,plantRows,harvestRows,dryingRows,date) {
   const wb=XLSX.utils.book_new();
-  const ws1=XLSX.utils.aoa_to_sheet(summaryRows);
-  XLSX.utils.book_append_sheet(wb,ws1,'Summary');
-  const ws2=XLSX.utils.aoa_to_sheet(plantRows);
-  XLSX.utils.book_append_sheet(wb,ws2,'Individual Readings');
-  if (harvestRows){const ws3=XLSX.utils.aoa_to_sheet(harvestRows);XLSX.utils.book_append_sheet(wb,ws3,'Harvest Data');}
-  if (dryingRows){const ws4=XLSX.utils.aoa_to_sheet(dryingRows);XLSX.utils.book_append_sheet(wb,ws4,'Drying Log');}
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(summaryRows),'Summary');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(plantRows),'Individual Readings');
+  if (harvestRows) XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(harvestRows),'Harvest Data');
+  if (dryingRows) XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dryingRows),'Drying Log');
   XLSX.writeFile(wb,'field_data_'+currentSession.side+'_'+date+'.xlsx');
   showToast('Export ready!');
 }

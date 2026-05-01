@@ -60,9 +60,8 @@
           <button class="toggle-btn" id="type-harvest" onclick="selectSessionType('Harvest')">Harvest</button>
         </div>
       </div>
-      <!-- Harvest bag weights - shown only when Harvest selected -->
       <div id="harvest-bag-weights" style="display:none;flex-direction:column;gap:14px;">
-        <div class="form-section-title">BAG WEIGHTS (reference — enter once)</div>
+        <div class="form-section-title">BAG WEIGHTS (reference — enter once per session)</div>
         <div class="field-group">
           <label>Zip Lock Bag Weight (g)</label>
           <input type="number" inputmode="decimal" id="bag-ziplock" placeholder="e.g. 8.55" />
@@ -94,12 +93,16 @@
     </div>
     <div class="session-info-bar" id="session-info-bar"></div>
     <div class="session-scroll">
-      <div class="section-label">DESTRUCTIVE SAMPLES</div>
-      <div id="plot-list" class="plot-list"></div>
-      <div class="section-label">REFERENCE ROWS</div>
-      <div id="ref-list" class="plot-list"></div>
-      <div class="section-label">LYSIMETER BOXES</div>
-      <div id="lys-list" class="plot-list"></div>
+      <!-- Weekly sections -->
+      <div id="weekly-sections">
+        <div class="section-label">DESTRUCTIVE SAMPLES</div>
+        <div id="plot-list" class="plot-list"></div>
+        <div class="section-label">REFERENCE ROWS</div>
+        <div id="ref-list" class="plot-list"></div>
+        <div class="section-label">LYSIMETER BOXES</div>
+        <div id="lys-list" class="plot-list"></div>
+      </div>
+      <!-- Harvest section -->
       <div id="harvest-section" style="display:none;">
         <div class="section-label">HARVEST DATA</div>
         <div id="harvest-list" class="plot-list"></div>
@@ -147,7 +150,6 @@
     <div class="session-info-bar" id="drying-info-bar"></div>
     <div class="session-scroll" id="drying-log-content"></div>
     <div class="screen-footer">
-      <button class="btn-secondary" onclick="addDryingDate()">+ Add Weigh Date</button>
       <button class="btn-primary" onclick="backToSessionMenu()">Done</button>
     </div>
   </div>
