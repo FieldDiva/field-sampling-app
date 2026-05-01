@@ -827,11 +827,18 @@ function exportSession() {
 }
 function buildXLSX(summaryRows,plantRows,harvestRows,dryingRows,date) {
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(summaryRows),'Summary');
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(plantRows),'Individual Readings');
-  if (harvestRows) XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(harvestRows),'Harvest Data');
-  if (dryingRows) XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dryingRows),'Drying Log');
-  XLSX.writeFile(wb,'field_data_'+currentSession.side+'_'+date+'.xlsx');
+  const isHarvest=currentSession.type==='Harvest';
+  if (isHarvest) {
+    // Harvest export: Harvest Data + Drying Log only
+    if (harvestRows) XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(harvestRows),'Harvest Data');
+    if (dryingRows) XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dryingRows),'Drying Log');
+    XLSX.writeFile(wb,'harvest_data_'+currentSession.side+'_'+date+'.xlsx');
+  } else {
+    // Weekly export: Summary + Individual Readings only
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(summaryRows),'Summary');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(plantRows),'Individual Readings');
+    XLSX.writeFile(wb,'field_data_'+currentSession.side+'_'+date+'.xlsx');
+  }
   showToast('Export ready!');
 }
 function getDOY(dateStr) {
