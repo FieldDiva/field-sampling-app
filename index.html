@@ -27,7 +27,7 @@
     <div id="home-recent" class="recent-sessions"></div>
   </div>
 
-  <!-- SCREEN: New Session Setup -->
+  <!-- SCREEN: New Session -->
   <div id="screen-new-session" class="screen">
     <div class="screen-header">
       <button class="btn-back" onclick="showScreen('screen-home')">← Back</button>
@@ -60,6 +60,22 @@
           <button class="toggle-btn" id="type-harvest" onclick="selectSessionType('Harvest')">Harvest</button>
         </div>
       </div>
+      <!-- Harvest bag weights - shown only when Harvest selected -->
+      <div id="harvest-bag-weights" style="display:none;flex-direction:column;gap:14px;">
+        <div class="form-section-title">BAG WEIGHTS (reference — enter once)</div>
+        <div class="field-group">
+          <label>Zip Lock Bag Weight (g)</label>
+          <input type="number" inputmode="decimal" id="bag-ziplock" placeholder="e.g. 8.55" />
+        </div>
+        <div class="field-group">
+          <label>Purple Bag Weight (g)</label>
+          <input type="number" inputmode="decimal" id="bag-purple" placeholder="e.g. 19.1" />
+        </div>
+        <div class="field-group">
+          <label>Brown Paper Bag Avg Weight (g)</label>
+          <input type="number" inputmode="decimal" id="bag-brown" placeholder="e.g. 59.56" />
+        </div>
+      </div>
       <div class="field-group">
         <label>Technician</label>
         <input type="text" id="session-tech" placeholder="Your name" />
@@ -84,8 +100,8 @@
       <div id="ref-list" class="plot-list"></div>
       <div class="section-label">LYSIMETER BOXES</div>
       <div id="lys-list" class="plot-list"></div>
-      <div id="harvest-section" style="display:none">
-        <div class="section-label">HARVEST</div>
+      <div id="harvest-section" style="display:none;">
+        <div class="section-label">HARVEST DATA</div>
         <div id="harvest-list" class="plot-list"></div>
       </div>
     </div>
@@ -113,7 +129,7 @@
     <div class="screen-header">
       <button class="btn-back" onclick="backToSessionMenu()">← Back</button>
       <h2 id="harvest-entry-title">Harvest</h2>
-      <span id="harvest-entry-badge" class="badge" style="background:#fdecea;color:#c0392b;">HARVEST</span>
+      <span class="badge" style="background:#fdecea;color:#c0392b;">HARVEST</span>
     </div>
     <div class="form-body" id="harvest-entry-form"></div>
     <div class="screen-footer">
@@ -145,9 +161,7 @@
     <div id="sessions-list" class="sessions-list"></div>
   </div>
 
-  <!-- TOAST -->
   <div id="toast" class="toast"></div>
-
   <script src="js/app.js"></script>
 </body>
 </html>
