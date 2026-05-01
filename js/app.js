@@ -1,17 +1,16 @@
 // ============================================
-// FIELD SAMPLER PWA - App Logic (Clean)
+// FIELD SAMPLER PWA - App Logic
 // ============================================
 
-// --- CONFIG ---
 const SPANS = [2, 3, 4, 7, 8, 9];
 const LYSIMETER_SPANS = [3, 8];
 const QUADRANTS = ['NE', 'NW', 'SE', 'SW'];
 const ROWS = ['R1', 'R2', 'R3', 'R4'];
+const STABILITY_THRESHOLD = 0.01; // 1%
 
-// --- STATE ---
 let currentSession = null;
 let currentPlotKey = null;
-let currentMode = null; // 'destructive' | 'ref' | 'lys'
+let currentMode = null;
 let selectedSide = 'East';
 let selectedSessionType = 'Weekly';
 let currentPlotGPS = { lat: null, lng: null };
@@ -33,7 +32,7 @@ function saveCurrentSession() {
 
 // --- NAVIGATION ---
 function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
   document.getElementById(id).classList.add('active');
   if (id === 'screen-home') renderHome();
   if (id === 'screen-sessions') renderSessionsList();
@@ -47,15 +46,15 @@ function backToSessionMenu() {
 // --- HOME ---
 function renderHome() {
   const sessions = getSessions();
-  const recent = Object.values(sessions).sort((a,b) => b.id - a.id).slice(0, 3);
+  const recent = Object.values(sessions).sort(function(a,b){return b.id-a.id;}).slice(0,3);
   const el = document.getElementById('home-recent');
   if (recent.length === 0) { el.innerHTML = ''; return; }
   el.innerHTML = '<div style="color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;letter-spacing:0.5px;margin-bottom:8px;">RECENT</div>' +
-    recent.map(s =>
-      '<div class="session-card" style="margin-bottom:8px;" onclick="openSession(\'' + s.id + '\')">' +
-      '<div class="session-card-info"><h3>' + s.date + ' · ' + s.side + '</h3><p>' + s.crop + ' · ' + s.type + '</p></div>' +
-      '<span class="session-card-arrow">›</span></div>'
-    ).join('');
+    recent.map(function(s) {
+      return '<div class="session-card" style="margin-bottom:8px;" onclick="openSession(\'' + s.id + '\')">' +
+        '<div class="session-card-info"><h3>' + s.date + ' \u00b7 ' + s.side + '</h3><p>' + s.crop + ' \u00b7 ' + s.type + '</p></div>' +
+        '<span class="session-card-arrow">\u203a</span></div>';
+    }).join('');
 }
 
 // --- NEW SESSION ---
@@ -69,19 +68,16 @@ function initNewSessionForm() {
   document.getElementById('type-weekly').classList.add('active');
   document.getElementById('type-harvest').classList.remove('active');
 }
-
 function selectSide(side) {
   selectedSide = side;
   document.getElementById('side-east').classList.toggle('active', side === 'East');
   document.getElementById('side-west').classList.toggle('active', side === 'West');
 }
-
 function selectSessionType(type) {
   selectedSessionType = type;
   document.getElementById('type-weekly').classList.toggle('active', type === 'Weekly');
   document.getElementById('type-harvest').classList.toggle('active', type === 'Harvest');
 }
-
 function startSession() {
   const date = document.getElementById('session-date').value;
   const crop = document.getElementById('session-crop').value;
@@ -94,7 +90,9 @@ function startSession() {
     side: selectedSide,
     type: selectedSessionType,
     tech,
-    plots: {}, refs: {}, lys: {}
+    plots: {}, refs: {}, lys: {},
+    harvest: {},
+    dryingLog: { dates: [], weights: {} }
   };
   saveCurrentSession();
   showScreen('screen-session-menu');
@@ -123,7 +121,6 @@ function captureGPS() {
   );
 }
 
-// --- AUTO ADVANCE ---
 function autoAdvance(input, nextId) {
   if (input.value.length > 0) {
     const next = document.getElementById(nextId);
@@ -144,17 +141,16 @@ function calcPlantsM2() {
     el.classList.remove('has-value');
   }
 }
-
 function calcAvg(prefix, displayId) {
   const vals = [1,2,3,4,5].map(function(i) {
-    return parseFloat(document.getElementById(prefix + i) ? document.getElementById(prefix + i).value : '');
-  }).filter(function(v) { return !isNaN(v); });
+    const el = document.getElementById(prefix + i);
+    return el ? parseFloat(el.value) : NaN;
+  }).filter(function(v){return !isNaN(v);});
   const el = document.getElementById(displayId);
   if (vals.length === 0) { el.textContent = 'Avg: \u2014'; return; }
-  const avg = (vals.reduce(function(a,b){return a+b;}, 0) / vals.length).toFixed(1);
+  const avg = (vals.reduce(function(a,b){return a+b;},0)/vals.length).toFixed(1);
   el.textContent = 'Avg: ' + avg + (displayId.indexOf('height') >= 0 ? ' in' : ' leaves');
 }
-
 function calcLAI() {
   const la = parseFloat(document.getElementById('lab-leaf-area') ? document.getElementById('lab-leaf-area').value : '');
   const bagWt = parseFloat(document.getElementById('lab-bag-weight') ? document.getElementById('lab-bag-weight').value : '') || 0;
@@ -182,12 +178,13 @@ function calcLAI() {
 // --- SESSION MENU ---
 function renderSessionMenu() {
   if (!currentSession) return;
+  const isHarvest = currentSession.type === 'Harvest';
+  const sideChar = currentSession.side.charAt(0);
+
   document.getElementById('session-menu-title').textContent = currentSession.date + ' \u00b7 ' + currentSession.side;
   document.getElementById('session-info-bar').textContent =
     currentSession.crop + ' \u00b7 ' + currentSession.year + ' \u00b7 ' + currentSession.type +
     (currentSession.tech ? ' \u00b7 ' + currentSession.tech : '');
-
-  const sideChar = currentSession.side.charAt(0);
 
   // Destructive plots
   const plotList = document.getElementById('plot-list');
@@ -200,16 +197,13 @@ function renderSessionMenu() {
       const item = document.createElement('div');
       item.className = 'plot-item' + (isLys ? ' lysimeter' : '');
       item.innerHTML =
-        '<div style="flex:1">' +
-        '<div class="plot-item-name">Span ' + span + sideChar + ' \u00b7 ' + ab + '</div>' +
-        '<div class="plot-item-sub">' + (isLys ? '\ud83e\uddea Lysimeter span' : 'Destructive sample') + '</div>' +
-        '</div>' +
+        '<div style="flex:1"><div class="plot-item-name">Span ' + span + sideChar + ' \u00b7 ' + ab + '</div>' +
+        '<div class="plot-item-sub">' + (isLys ? '\ud83e\uddea Lysimeter span' : 'Destructive sample') + '</div></div>' +
         '<div class="status-dots">' +
         '<div class="dot' + (data.field_saved ? ' filled-field' : '') + '"></div>' +
         '<div class="dot' + (data.lab_saved ? ' filled-lab' : '') + '"></div>' +
-        '</div>' +
-        '<span style="font-size:20px;color:#bbb">\u203a</span>';
-      item.onclick = (function(k) { return function() { openPlotEntry(k); }; })(key);
+        '</div><span style="font-size:20px;color:#bbb">\u203a</span>';
+      item.onclick = (function(k){return function(){openPlotEntry(k);};})(key);
       plotList.appendChild(item);
     });
   });
@@ -224,13 +218,11 @@ function renderSessionMenu() {
       const item = document.createElement('div');
       item.className = 'plot-item';
       item.innerHTML =
-        '<div style="flex:1">' +
-        '<div class="plot-item-name">' + q + ' \u00b7 ' + r + '</div>' +
-        '<div class="plot-item-sub">Reference row</div>' +
-        '</div>' +
+        '<div style="flex:1"><div class="plot-item-name">' + q + ' \u00b7 ' + r + '</div>' +
+        '<div class="plot-item-sub">Reference row</div></div>' +
         '<div class="status-dots"><div class="dot' + (data.saved ? ' filled-lab' : '') + '"></div></div>' +
         '<span style="font-size:20px;color:#bbb">\u203a</span>';
-      item.onclick = (function(k,qq,rr) { return function() { openRefEntry(k,qq,rr); }; })(key,q,r);
+      item.onclick = (function(k,qq,rr){return function(){openRefEntry(k,qq,rr);};})(key,q,r);
       refList.appendChild(item);
     });
   });
@@ -244,15 +236,61 @@ function renderSessionMenu() {
     const item = document.createElement('div');
     item.className = 'plot-item lysimeter';
     item.innerHTML =
-      '<div style="flex:1">' +
-      '<div class="plot-item-name">' + q + ' Box</div>' +
-      '<div class="plot-item-sub">' + (currentSession.type === 'Harvest' ? 'Harvest + weekly' : 'Height & leaf count only') + '</div>' +
-      '</div>' +
+      '<div style="flex:1"><div class="plot-item-name">' + q + ' Box</div>' +
+      '<div class="plot-item-sub">' + (isHarvest ? 'Harvest + weekly' : 'Height & leaf count only') + '</div></div>' +
       '<div class="status-dots"><div class="dot' + (data.saved ? ' filled-lab' : '') + '"></div></div>' +
       '<span style="font-size:20px;color:#bbb">\u203a</span>';
-    item.onclick = (function(k,qq) { return function() { openLysEntry(k,qq); }; })(key,q);
+    item.onclick = (function(k,qq){return function(){openLysEntry(k,qq);};})(key,q);
     lysList.appendChild(item);
   });
+
+  // Harvest section
+  const harvestSection = document.getElementById('harvest-section');
+  const harvestList = document.getElementById('harvest-list');
+  if (isHarvest) {
+    harvestSection.style.display = 'block';
+    harvestList.innerHTML = '';
+
+    // All harvest plots
+    const harvestPlots = [];
+    SPANS.forEach(function(span) {
+      ['A','B'].forEach(function(ab) {
+        harvestPlots.push(span + sideChar + ab);
+      });
+    });
+    QUADRANTS.forEach(function(q) { harvestPlots.push(q + '_BOX'); });
+
+    harvestPlots.forEach(function(key) {
+      const data = currentSession.harvest[key] || {};
+      const label = key.indexOf('_BOX') >= 0 ? key.replace('_BOX', ' Box') : key;
+      const item = document.createElement('div');
+      item.className = 'plot-item' + (key.indexOf('_BOX') >= 0 ? ' lysimeter' : '');
+      item.innerHTML =
+        '<div style="flex:1"><div class="plot-item-name">' + label + '</div>' +
+        '<div class="plot-item-sub">Harvest data</div></div>' +
+        '<div class="status-dots"><div class="dot' + (data.saved ? ' filled-lab' : '') + '"></div></div>' +
+        '<span style="font-size:20px;color:#bbb">\u203a</span>';
+      item.onclick = (function(k){return function(){openHarvestEntry(k);};})(key);
+      harvestList.appendChild(item);
+    });
+
+    // Drying log button
+    const dryBtn = document.createElement('div');
+    dryBtn.className = 'plot-item';
+    dryBtn.style.background = '#fff8e8';
+    dryBtn.style.borderLeft = '4px solid #c17f24';
+    const log = currentSession.dryingLog || { dates: [] };
+    const stable = getDryingStableCount();
+    const total = SPANS.length * 2 + QUADRANTS.length;
+    dryBtn.innerHTML =
+      '<div style="flex:1"><div class="plot-item-name">\ud83d\udcca Drying Log</div>' +
+      '<div class="plot-item-sub">' + log.dates.length + ' weigh date(s) \u00b7 ' + stable + '/' + total + ' stable</div></div>' +
+      '<span style="font-size:20px;color:#bbb">\u203a</span>';
+    dryBtn.onclick = function() { openDryingLog(); };
+    harvestList.appendChild(dryBtn);
+  } else {
+    harvestSection.style.display = 'none';
+  }
 }
 
 // --- DESTRUCTIVE PLOT ENTRY ---
@@ -272,17 +310,6 @@ function openPlotEntry(key) {
   const gpsDisplay = data.gps_lat ? (data.gps_lat + ', ' + data.gps_lng) : 'Not captured';
   const gpsClass = data.gps_lat ? ' captured' : '';
 
-  function plantInputs(prefix, savedData, avgId, nextPrefix) {
-    return [1,2,3,4,5].map(function(i) {
-      const nextId = i < 5 ? (prefix + (i+1)) : (nextPrefix === 'notes' ? 'f-notes' : nextPrefix + '1');
-      return '<div class="plant-input-wrap"><span>P' + i + '</span>' +
-        '<input type="number" inputmode="' + (prefix === 'f-h' ? 'decimal' : 'numeric') + '" id="' + prefix + i + '" value="' + (savedData[prefix.replace('f-','') + i] || '') + '"' +
-        ' oninput="calcAvg(\'' + prefix + '\',\'' + avgId + '\')"' +
-        ' onchange="autoAdvance(this,\'' + nextId + '\')">' +
-        '</div>';
-    }).join('');
-  }
-
   const form = document.getElementById('field-entry-form');
   form.innerHTML =
     '<div style="display:flex;gap:8px;margin-bottom:4px;">' +
@@ -292,17 +319,13 @@ function openPlotEntry(key) {
 
     '<div id="tab-content-field" style="display:flex;flex-direction:column;gap:14px;">' +
     '<div class="field-group"><label>GPS Location</label>' +
-    '<div class="gps-row">' +
-    '<span id="plot-gps-display" class="gps-value' + gpsClass + '">' + gpsDisplay + '</span>' +
-    '<button class="btn-gps" onclick="captureGPS()">\ud83d\udccd Capture</button>' +
-    '</div></div>' +
+    '<div class="gps-row"><span id="plot-gps-display" class="gps-value' + gpsClass + '">' + gpsDisplay + '</span>' +
+    '<button class="btn-gps" onclick="captureGPS()">\ud83d\udccd Capture</button></div></div>' +
 
     '<div class="field-group"><label>Plant Count \u2014 Row 1 (1m)</label>' +
     '<input type="number" id="f-count1" inputmode="numeric" placeholder="e.g. 8" value="' + (data.count1 || '') + '"></div>' +
-
     '<div class="field-group"><label>Plant Count \u2014 Row 2 (1m)</label>' +
     '<input type="number" id="f-count2" inputmode="numeric" placeholder="e.g. 9" value="' + (data.count2 || '') + '"></div>' +
-
     '<div class="field-group"><label>Plants / m\u00b2 (calculated)</label>' +
     '<div class="calc-field' + (data.plants_m2 ? ' has-value' : '') + '" id="f-plants-m2">' + (data.plants_m2 || '\u2014') + '</div></div>' +
 
@@ -312,8 +335,7 @@ function openPlotEntry(key) {
       const nextId = i < 5 ? 'f-h'+(i+1) : 'f-l1';
       return '<div class="plant-input-wrap"><span>P'+i+'</span>' +
         '<input type="number" inputmode="decimal" id="f-h'+i+'" value="'+(data['h'+i]||'')+'"' +
-        ' oninput="calcAvg(\'f-h\',\'f-avg-height\')"' +
-        ' onchange="autoAdvance(this,\''+nextId+'\')"></div>';
+        ' oninput="calcAvg(\'f-h\',\'f-avg-height\')" onchange="autoAdvance(this,\''+nextId+'\')"></div>';
     }).join('') +
     '</div><div class="avg-display" id="f-avg-height">Avg: ' + (data.avg_height ? data.avg_height + ' in' : '\u2014') + '</div></div>' +
 
@@ -323,14 +345,13 @@ function openPlotEntry(key) {
       const nextId = i < 5 ? 'f-l'+(i+1) : 'f-notes';
       return '<div class="plant-input-wrap"><span>P'+i+'</span>' +
         '<input type="number" inputmode="numeric" id="f-l'+i+'" value="'+(data['l'+i]||'')+'"' +
-        ' oninput="calcAvg(\'f-l\',\'f-avg-leaves\')"' +
-        ' onchange="autoAdvance(this,\''+nextId+'\')"></div>';
+        ' oninput="calcAvg(\'f-l\',\'f-avg-leaves\')" onchange="autoAdvance(this,\''+nextId+'\')"></div>';
     }).join('') +
     '</div><div class="avg-display" id="f-avg-leaves">Avg: ' + (data.avg_leaves ? data.avg_leaves + ' leaves' : '\u2014') + '</div></div>' +
 
     '<div class="field-group"><label>Notes</label>' +
     '<textarea id="f-notes" placeholder="Flags, observations, issues...">' + (data.notes || '') + '</textarea></div>' +
-    '</div>' + // end tab-content-field
+    '</div>' +
 
     '<div id="tab-content-lab" style="display:none;flex-direction:column;gap:14px;">' +
     '<div class="form-section-title">LEAF AREA METER CALIBRATION</div>' +
@@ -341,17 +362,16 @@ function openPlotEntry(key) {
 
     '<div class="field-group"><label>Leaf Area (cm\u00b2)</label>' +
     '<input type="number" inputmode="decimal" id="lab-leaf-area" value="' + (data.leaf_area || '') + '" oninput="calcLAI()"></div>' +
-
     '<div class="field-group"><label>Bag Weight (g)</label>' +
     '<input type="number" inputmode="decimal" id="lab-bag-weight" value="' + (data.bag_weight || '') + '" oninput="calcLAI()"></div>' +
 
-    '<div class="form-section-title">WET WEIGHTS</div>' +
+    '<div class="form-section-title">WET WEIGHTS (before bag subtraction)</div>' +
     '<div class="field-group"><label>Leaf Wet Weight (g)</label>' +
     '<input type="number" inputmode="decimal" id="lab-leaf-wet" value="' + (data.leaf_wet_raw || '') + '"></div>' +
     '<div class="field-group"><label>Stem Wet Weight (g)</label>' +
     '<input type="number" inputmode="decimal" id="lab-stem-wet" value="' + (data.stem_wet_raw || '') + '"></div>' +
 
-    '<div class="form-section-title">DRY WEIGHTS</div>' +
+    '<div class="form-section-title">DRY WEIGHTS (before bag subtraction)</div>' +
     '<div class="field-group"><label>Leaf Dry Weight (g)</label>' +
     '<input type="number" inputmode="decimal" id="lab-leaf-dry" value="' + (data.leaf_dry_raw || '') + '" oninput="calcLAI()"></div>' +
     '<div class="field-group"><label>Stem Dry Weight (g)</label>' +
@@ -365,7 +385,7 @@ function openPlotEntry(key) {
 
     '<div class="field-group"><label>Lab Notes</label>' +
     '<textarea id="lab-notes" placeholder="Any issues with this sample...">' + (data.lab_notes || '') + '</textarea></div>' +
-    '</div>'; // end tab-content-lab
+    '</div>';
 
   document.getElementById('f-count1').addEventListener('input', calcPlantsM2);
   document.getElementById('f-count2').addEventListener('input', calcPlantsM2);
@@ -381,69 +401,59 @@ function switchTab(tab) {
   document.getElementById('tab-lab').classList.toggle('active', tab === 'lab');
 }
 
-// --- SAVE (handles all modes) ---
 function saveFieldEntry() {
   if (currentMode === 'ref') { saveRefEntry(); return; }
   if (currentMode === 'lys') { saveLysEntry(); return; }
 
   const gps_lat = currentPlotGPS.lat;
   const gps_lng = currentPlotGPS.lng;
-
   const c1 = parseFloat(document.getElementById('f-count1') ? document.getElementById('f-count1').value : '') || null;
   const c2 = parseFloat(document.getElementById('f-count2') ? document.getElementById('f-count2').value : '') || null;
   const pm2 = (c1 !== null && c2 !== null) ? ((c1 + c2) / 1.524) : null;
+  const heights = [1,2,3,4,5].map(function(i){return parseFloat(document.getElementById('f-h'+i)?document.getElementById('f-h'+i).value:'')||null;});
+  const leaves  = [1,2,3,4,5].map(function(i){return parseFloat(document.getElementById('f-l'+i)?document.getElementById('f-l'+i).value:'')||null;});
+  const validH = heights.filter(function(v){return v!==null;});
+  const validL = leaves.filter(function(v){return v!==null;});
+  const avgH = validH.length?(validH.reduce(function(a,b){return a+b;},0)/validH.length):null;
+  const avgL = validL.length?(validL.reduce(function(a,b){return a+b;},0)/validL.length):null;
 
-  const heights = [1,2,3,4,5].map(function(i) { return parseFloat(document.getElementById('f-h'+i) ? document.getElementById('f-h'+i).value : '') || null; });
-  const leaves  = [1,2,3,4,5].map(function(i) { return parseFloat(document.getElementById('f-l'+i) ? document.getElementById('f-l'+i).value : '') || null; });
-  const validH = heights.filter(function(v){return v !== null;});
-  const validL = leaves.filter(function(v){return v !== null;});
-  const avgH = validH.length ? (validH.reduce(function(a,b){return a+b;},0)/validH.length) : null;
-  const avgL = validL.length ? (validL.reduce(function(a,b){return a+b;},0)/validL.length) : null;
-
-  const la       = parseFloat(document.getElementById('lab-leaf-area') ? document.getElementById('lab-leaf-area').value : '') || null;
-  const bagWt    = parseFloat(document.getElementById('lab-bag-weight') ? document.getElementById('lab-bag-weight').value : '') || 0;
-  const leafWetRaw = parseFloat(document.getElementById('lab-leaf-wet') ? document.getElementById('lab-leaf-wet').value : '') || null;
-  const stemWetRaw = parseFloat(document.getElementById('lab-stem-wet') ? document.getElementById('lab-stem-wet').value : '') || null;
-  const leafDryRaw = parseFloat(document.getElementById('lab-leaf-dry') ? document.getElementById('lab-leaf-dry').value : '') || null;
-  const stemDryRaw = parseFloat(document.getElementById('lab-stem-dry') ? document.getElementById('lab-stem-dry').value : '') || null;
-
-  // Subtract bag weight from each measurement
+  const la       = parseFloat(document.getElementById('lab-leaf-area')?document.getElementById('lab-leaf-area').value:'')||null;
+  const bagWt    = parseFloat(document.getElementById('lab-bag-weight')?document.getElementById('lab-bag-weight').value:'')||0;
+  const leafWetRaw = parseFloat(document.getElementById('lab-leaf-wet')?document.getElementById('lab-leaf-wet').value:'')||null;
+  const stemWetRaw = parseFloat(document.getElementById('lab-stem-wet')?document.getElementById('lab-stem-wet').value:'')||null;
+  const leafDryRaw = parseFloat(document.getElementById('lab-leaf-dry')?document.getElementById('lab-leaf-dry').value:'')||null;
+  const stemDryRaw = parseFloat(document.getElementById('lab-stem-dry')?document.getElementById('lab-stem-dry').value:'')||null;
   const leafWet = leafWetRaw !== null ? leafWetRaw - bagWt : null;
   const stemWet = stemWetRaw !== null ? stemWetRaw - bagWt : null;
   const leafDry = leafDryRaw !== null ? leafDryRaw - bagWt : null;
   const stemDry = stemDryRaw !== null ? stemDryRaw - bagWt : null;
-
   const lai  = la ? la / 15239.96 : null;
   const agdm = (leafDry && stemDry) ? leafDry + stemDry : null;
 
   if (!currentSession.plots[currentPlotKey]) currentSession.plots[currentPlotKey] = {};
   Object.assign(currentSession.plots[currentPlotKey], {
-    gps_lat: gps_lat,
-    gps_lng: gps_lng,
-    count1: c1, count2: c2,
-    plants_m2: pm2 ? pm2.toFixed(1) : null,
-    h1: heights[0], h2: heights[1], h3: heights[2], h4: heights[3], h5: heights[4],
+    gps_lat, gps_lng,
+    count1: c1, count2: c2, plants_m2: pm2 ? pm2.toFixed(1) : null,
+    h1:heights[0],h2:heights[1],h3:heights[2],h4:heights[3],h5:heights[4],
     avg_height: avgH ? avgH.toFixed(1) : null,
-    l1: leaves[0], l2: leaves[1], l3: leaves[2], l4: leaves[3], l5: leaves[4],
+    l1:leaves[0],l2:leaves[1],l3:leaves[2],l4:leaves[3],l5:leaves[4],
     avg_leaves: avgL ? avgL.toFixed(1) : null,
-    notes: document.getElementById('f-notes') ? document.getElementById('f-notes').value : '',
+    notes: document.getElementById('f-notes')?document.getElementById('f-notes').value:'',
     field_saved: validH.length > 0 || c1 !== null,
-    leaf_area: la,
-    bag_weight: bagWt || null,
-    cal_actual: parseFloat(document.getElementById('lab-cal-actual') ? document.getElementById('lab-cal-actual').value : '') || null,
-    cal_machine: parseFloat(document.getElementById('lab-cal-machine') ? document.getElementById('lab-cal-machine').value : '') || null,
+    leaf_area: la, bag_weight: bagWt||null,
+    cal_actual: parseFloat(document.getElementById('lab-cal-actual')?document.getElementById('lab-cal-actual').value:'')||null,
+    cal_machine: parseFloat(document.getElementById('lab-cal-machine')?document.getElementById('lab-cal-machine').value:'')||null,
     leaf_wet_raw: leafWetRaw, stem_wet_raw: stemWetRaw,
     leaf_dry_raw: leafDryRaw, stem_dry_raw: stemDryRaw,
     leaf_wet: leafWet, stem_wet: stemWet,
     leaf_dry: leafDry, stem_dry: stemDry,
-    lai: lai, agdm: agdm,
-    lab_notes: document.getElementById('lab-notes') ? document.getElementById('lab-notes').value : '',
+    lai, agdm,
+    lab_notes: document.getElementById('lab-notes')?document.getElementById('lab-notes').value:'',
     lab_saved: la !== null || leafDryRaw !== null
   });
-
   saveCurrentSession();
   showToast('Saved \u2713');
-  setTimeout(function() { backToSessionMenu(); }, 800);
+  setTimeout(function(){backToSessionMenu();},800);
 }
 
 // --- REFERENCE ROW ---
@@ -454,53 +464,48 @@ function openRefEntry(key, quadrant, row) {
   document.getElementById('field-entry-title').textContent = quadrant + ' \u00b7 ' + row;
   document.getElementById('field-entry-badge').textContent = 'REF ROW';
   document.getElementById('field-entry-badge').className = 'badge';
-
   document.getElementById('field-entry-form').innerHTML =
     '<div class="form-section-title">PLANT HEIGHT (inches) \u2014 5 Plants</div>' +
     '<div class="field-group"><div class="plant-grid">' +
-    [1,2,3,4,5].map(function(i) {
-      const nextId = i < 5 ? 'f-h'+(i+1) : 'f-l1';
+    [1,2,3,4,5].map(function(i){
+      const nextId = i<5?'f-h'+(i+1):'f-l1';
       return '<div class="plant-input-wrap"><span>P'+i+'</span>' +
         '<input type="number" inputmode="decimal" id="f-h'+i+'" value="'+(data['h'+i]||'')+'"' +
         ' oninput="calcAvg(\'f-h\',\'f-avg-height\')" onchange="autoAdvance(this,\''+nextId+'\')"></div>';
     }).join('') +
-    '</div><div class="avg-display" id="f-avg-height">Avg: ' + (data.avg_height ? data.avg_height + ' in' : '\u2014') + '</div></div>' +
-
+    '</div><div class="avg-display" id="f-avg-height">Avg: '+(data.avg_height?data.avg_height+' in':'\u2014')+'</div></div>' +
     '<div class="form-section-title">LEAF COUNT \u2014 5 Plants</div>' +
     '<div class="field-group"><div class="plant-grid">' +
-    [1,2,3,4,5].map(function(i) {
-      const nextId = i < 5 ? 'f-l'+(i+1) : 'f-notes';
+    [1,2,3,4,5].map(function(i){
+      const nextId = i<5?'f-l'+(i+1):'f-notes';
       return '<div class="plant-input-wrap"><span>P'+i+'</span>' +
         '<input type="number" inputmode="numeric" id="f-l'+i+'" value="'+(data['l'+i]||'')+'"' +
         ' oninput="calcAvg(\'f-l\',\'f-avg-leaves\')" onchange="autoAdvance(this,\''+nextId+'\')"></div>';
     }).join('') +
-    '</div><div class="avg-display" id="f-avg-leaves">Avg: ' + (data.avg_leaves ? data.avg_leaves + ' leaves' : '\u2014') + '</div></div>' +
-
+    '</div><div class="avg-display" id="f-avg-leaves">Avg: '+(data.avg_leaves?data.avg_leaves+' leaves':'\u2014')+'</div></div>' +
     '<div class="field-group"><label>Notes / Flag</label>' +
-    '<textarea id="f-notes" placeholder="e.g. flag, bugs, shooting head...">' + (data.notes || '') + '</textarea></div>';
-
+    '<textarea id="f-notes" placeholder="e.g. flag, bugs, shooting head...">'+(data.notes||'')+'</textarea></div>';
   showScreen('screen-field-entry');
 }
-
 function saveRefEntry() {
-  const heights = [1,2,3,4,5].map(function(i) { return parseFloat(document.getElementById('f-h'+i) ? document.getElementById('f-h'+i).value : '') || null; });
-  const leaves  = [1,2,3,4,5].map(function(i) { return parseFloat(document.getElementById('f-l'+i) ? document.getElementById('f-l'+i).value : '') || null; });
-  const validH = heights.filter(function(v){return v !== null;});
-  const validL = leaves.filter(function(v){return v !== null;});
-  const avgH = validH.length ? (validH.reduce(function(a,b){return a+b;},0)/validH.length) : null;
-  const avgL = validL.length ? (validL.reduce(function(a,b){return a+b;},0)/validL.length) : null;
-  if (!currentSession.refs[currentPlotKey]) currentSession.refs[currentPlotKey] = {};
-  Object.assign(currentSession.refs[currentPlotKey], {
-    h1: heights[0], h2: heights[1], h3: heights[2], h4: heights[3], h5: heights[4],
-    avg_height: avgH ? avgH.toFixed(1) : null,
-    l1: leaves[0], l2: leaves[1], l3: leaves[2], l4: leaves[3], l5: leaves[4],
-    avg_leaves: avgL ? avgL.toFixed(1) : null,
-    notes: document.getElementById('f-notes') ? document.getElementById('f-notes').value : '',
-    saved: true
+  const heights=[1,2,3,4,5].map(function(i){return parseFloat(document.getElementById('f-h'+i)?document.getElementById('f-h'+i).value:'')||null;});
+  const leaves=[1,2,3,4,5].map(function(i){return parseFloat(document.getElementById('f-l'+i)?document.getElementById('f-l'+i).value:'')||null;});
+  const validH=heights.filter(function(v){return v!==null;});
+  const validL=leaves.filter(function(v){return v!==null;});
+  const avgH=validH.length?(validH.reduce(function(a,b){return a+b;},0)/validH.length):null;
+  const avgL=validL.length?(validL.reduce(function(a,b){return a+b;},0)/validL.length):null;
+  if (!currentSession.refs[currentPlotKey]) currentSession.refs[currentPlotKey]={};
+  Object.assign(currentSession.refs[currentPlotKey],{
+    h1:heights[0],h2:heights[1],h3:heights[2],h4:heights[3],h5:heights[4],
+    avg_height:avgH?avgH.toFixed(1):null,
+    l1:leaves[0],l2:leaves[1],l3:leaves[2],l4:leaves[3],l5:leaves[4],
+    avg_leaves:avgL?avgL.toFixed(1):null,
+    notes:document.getElementById('f-notes')?document.getElementById('f-notes').value:'',
+    saved:true
   });
   saveCurrentSession();
   showToast('Saved \u2713');
-  setTimeout(function() { backToSessionMenu(); }, 800);
+  setTimeout(function(){backToSessionMenu();},800);
 }
 
 // --- LYSIMETER BOX ---
@@ -512,76 +517,267 @@ function openLysEntry(key, quadrant) {
   document.getElementById('field-entry-title').textContent = quadrant + ' Box';
   document.getElementById('field-entry-badge').textContent = 'LYSIMETER';
   document.getElementById('field-entry-badge').className = 'badge lysimeter';
-
   document.getElementById('field-entry-form').innerHTML =
     '<div class="form-section-title">PLANT HEIGHT (inches) \u2014 5 Plants</div>' +
     '<div class="field-group"><div class="plant-grid">' +
-    [1,2,3,4,5].map(function(i) {
-      const nextId = i < 5 ? 'f-h'+(i+1) : 'f-l1';
+    [1,2,3,4,5].map(function(i){
+      const nextId=i<5?'f-h'+(i+1):'f-l1';
       return '<div class="plant-input-wrap"><span>P'+i+'</span>' +
         '<input type="number" inputmode="decimal" id="f-h'+i+'" value="'+(data['h'+i]||'')+'"' +
         ' oninput="calcAvg(\'f-h\',\'f-avg-height\')" onchange="autoAdvance(this,\''+nextId+'\')"></div>';
     }).join('') +
-    '</div><div class="avg-display" id="f-avg-height">Avg: ' + (data.avg_height ? data.avg_height + ' in' : '\u2014') + '</div></div>' +
-
+    '</div><div class="avg-display" id="f-avg-height">Avg: '+(data.avg_height?data.avg_height+' in':'\u2014')+'</div></div>' +
     '<div class="form-section-title">LEAF COUNT \u2014 5 Plants</div>' +
     '<div class="field-group"><div class="plant-grid">' +
-    [1,2,3,4,5].map(function(i) {
-      const nextId = i < 5 ? 'f-l'+(i+1) : 'f-notes';
+    [1,2,3,4,5].map(function(i){
+      const nextId=i<5?'f-l'+(i+1):'f-notes';
       return '<div class="plant-input-wrap"><span>P'+i+'</span>' +
         '<input type="number" inputmode="numeric" id="f-l'+i+'" value="'+(data['l'+i]||'')+'"' +
         ' oninput="calcAvg(\'f-l\',\'f-avg-leaves\')" onchange="autoAdvance(this,\''+nextId+'\')"></div>';
     }).join('') +
-    '</div><div class="avg-display" id="f-avg-leaves">Avg: ' + (data.avg_leaves ? data.avg_leaves + ' leaves' : '\u2014') + '</div></div>' +
-
-    (isHarvest ?
-      '<div class="form-section-title">HARVEST DATA</div>' +
-      '<div class="field-group"><label>Nutrient Sample Weight (g)</label>' +
-      '<input type="number" inputmode="decimal" id="lys-nutrient" value="' + (data.nutrient_wt || '') + '"></div>' +
-      '<div class="field-group"><label>Biomass Wet Weight (lbs)</label>' +
-      '<input type="number" inputmode="decimal" id="lys-biomass-wet" value="' + (data.biomass_wet || '') + '"></div>' +
-      '<div class="field-group"><label>Biomass Sub Wet Weight (g)</label>' +
-      '<input type="number" inputmode="decimal" id="lys-sub-wet" value="' + (data.sub_wet || '') + '"></div>' +
-      '<div class="field-group"><label>Biomass Sub Dry Weight (g)</label>' +
-      '<input type="number" inputmode="decimal" id="lys-sub-dry" value="' + (data.sub_dry || '') + '"></div>'
-    : '') +
-
+    '</div><div class="avg-display" id="f-avg-leaves">Avg: '+(data.avg_leaves?data.avg_leaves+' leaves':'\u2014')+'</div></div>' +
     '<div class="field-group"><label>Notes</label>' +
-    '<textarea id="f-notes" placeholder="Observations...">' + (data.notes || '') + '</textarea></div>';
-
+    '<textarea id="f-notes" placeholder="Observations...">'+(data.notes||'')+'</textarea></div>';
   showScreen('screen-field-entry');
 }
-
 function saveLysEntry() {
-  const heights = [1,2,3,4,5].map(function(i) { return parseFloat(document.getElementById('f-h'+i) ? document.getElementById('f-h'+i).value : '') || null; });
-  const leaves  = [1,2,3,4,5].map(function(i) { return parseFloat(document.getElementById('f-l'+i) ? document.getElementById('f-l'+i).value : '') || null; });
-  const validH = heights.filter(function(v){return v !== null;});
-  const validL = leaves.filter(function(v){return v !== null;});
-  const avgH = validH.length ? (validH.reduce(function(a,b){return a+b;},0)/validH.length) : null;
-  const avgL = validL.length ? (validL.reduce(function(a,b){return a+b;},0)/validL.length) : null;
-  if (!currentSession.lys[currentPlotKey]) currentSession.lys[currentPlotKey] = {};
-  Object.assign(currentSession.lys[currentPlotKey], {
-    h1: heights[0], h2: heights[1], h3: heights[2], h4: heights[3], h5: heights[4],
-    avg_height: avgH ? avgH.toFixed(1) : null,
-    l1: leaves[0], l2: leaves[1], l3: leaves[2], l4: leaves[3], l5: leaves[4],
-    avg_leaves: avgL ? avgL.toFixed(1) : null,
-    nutrient_wt: parseFloat(document.getElementById('lys-nutrient') ? document.getElementById('lys-nutrient').value : '') || null,
-    biomass_wet: parseFloat(document.getElementById('lys-biomass-wet') ? document.getElementById('lys-biomass-wet').value : '') || null,
-    sub_wet:     parseFloat(document.getElementById('lys-sub-wet') ? document.getElementById('lys-sub-wet').value : '') || null,
-    sub_dry:     parseFloat(document.getElementById('lys-sub-dry') ? document.getElementById('lys-sub-dry').value : '') || null,
-    notes: document.getElementById('f-notes') ? document.getElementById('f-notes').value : '',
+  const heights=[1,2,3,4,5].map(function(i){return parseFloat(document.getElementById('f-h'+i)?document.getElementById('f-h'+i).value:'')||null;});
+  const leaves=[1,2,3,4,5].map(function(i){return parseFloat(document.getElementById('f-l'+i)?document.getElementById('f-l'+i).value:'')||null;});
+  const validH=heights.filter(function(v){return v!==null;});
+  const validL=leaves.filter(function(v){return v!==null;});
+  const avgH=validH.length?(validH.reduce(function(a,b){return a+b;},0)/validH.length):null;
+  const avgL=validL.length?(validL.reduce(function(a,b){return a+b;},0)/validL.length):null;
+  if (!currentSession.lys[currentPlotKey]) currentSession.lys[currentPlotKey]={};
+  Object.assign(currentSession.lys[currentPlotKey],{
+    h1:heights[0],h2:heights[1],h3:heights[2],h4:heights[3],h5:heights[4],
+    avg_height:avgH?avgH.toFixed(1):null,
+    l1:leaves[0],l2:leaves[1],l3:leaves[2],l4:leaves[3],l5:leaves[4],
+    avg_leaves:avgL?avgL.toFixed(1):null,
+    notes:document.getElementById('f-notes')?document.getElementById('f-notes').value:'',
+    saved:true
+  });
+  saveCurrentSession();
+  showToast('Saved \u2713');
+  setTimeout(function(){backToSessionMenu();},800);
+}
+
+// --- HARVEST ENTRY ---
+function openHarvestEntry(key) {
+  currentPlotKey = key;
+  const data = currentSession.harvest[key] || {};
+  const label = key.indexOf('_BOX') >= 0 ? key.replace('_BOX', ' Box') : key;
+  document.getElementById('harvest-entry-title').textContent = label;
+
+  document.getElementById('harvest-entry-form').innerHTML =
+    '<div class="field-group"><label>Plot Length (ft)</label>' +
+    '<input type="number" inputmode="decimal" id="h-plot-ft" value="' + (data.plot_ft || '') + '" placeholder="e.g. 60"></div>' +
+
+    '<div class="field-group"><label>Nutrient Sample Weight (g)</label>' +
+    '<input type="number" inputmode="decimal" id="h-nutrient-wt" value="' + (data.nutrient_wt || '') + '"></div>' +
+
+    '<div class="field-group"><label>Biomass Wet Weight (lbs)</label>' +
+    '<input type="number" inputmode="decimal" id="h-biomass-wet-lbs" value="' + (data.biomass_wet_lbs || '') + '"></div>' +
+
+    '<div class="field-group"><label>Biomass Sub Wet Weight (g)</label>' +
+    '<input type="number" inputmode="decimal" id="h-biomass-sub-wet" value="' + (data.biomass_sub_wet || '') + '"></div>' +
+
+    '<div class="form-section-title">BAG WEIGHTS</div>' +
+    '<div class="field-group"><label>Zip Lock Bag Weight (g)</label>' +
+    '<input type="number" inputmode="decimal" id="h-ziplock-wt" value="' + (data.ziplock_wt || '') + '"></div>' +
+
+    '<div class="field-group"><label>Purple Bag Weight (g)</label>' +
+    '<input type="number" inputmode="decimal" id="h-purple-wt" value="' + (data.purple_wt || '') + '"></div>' +
+
+    '<div class="field-group"><label>Brown Paper Bag Avg Weight (g)</label>' +
+    '<input type="number" inputmode="decimal" id="h-brown-wt" value="' + (data.brown_wt || '') + '"></div>' +
+
+    '<div class="field-group"><label>Notes</label>' +
+    '<textarea id="h-notes" placeholder="Any observations...">' + (data.notes || '') + '</textarea></div>';
+
+  showScreen('screen-harvest-entry');
+}
+
+function saveHarvestEntry() {
+  if (!currentSession.harvest[currentPlotKey]) currentSession.harvest[currentPlotKey] = {};
+  Object.assign(currentSession.harvest[currentPlotKey], {
+    plot_ft: parseFloat(document.getElementById('h-plot-ft').value) || null,
+    nutrient_wt: parseFloat(document.getElementById('h-nutrient-wt').value) || null,
+    biomass_wet_lbs: parseFloat(document.getElementById('h-biomass-wet-lbs').value) || null,
+    biomass_sub_wet: parseFloat(document.getElementById('h-biomass-sub-wet').value) || null,
+    ziplock_wt: parseFloat(document.getElementById('h-ziplock-wt').value) || null,
+    purple_wt: parseFloat(document.getElementById('h-purple-wt').value) || null,
+    brown_wt: parseFloat(document.getElementById('h-brown-wt').value) || null,
+    notes: document.getElementById('h-notes').value || '',
     saved: true
   });
   saveCurrentSession();
   showToast('Saved \u2713');
-  setTimeout(function() { backToSessionMenu(); }, 800);
+  setTimeout(function(){backToSessionMenu();},800);
+}
+
+// --- DRYING LOG ---
+function getAllHarvestPlotKeys() {
+  const sideChar = currentSession.side.charAt(0);
+  const keys = [];
+  SPANS.forEach(function(span) {
+    ['A','B'].forEach(function(ab) { keys.push(span + sideChar + ab); });
+  });
+  QUADRANTS.forEach(function(q) { keys.push(q + '_BOX'); });
+  return keys;
+}
+
+function getDryingStableCount() {
+  if (!currentSession || !currentSession.dryingLog) return 0;
+  const log = currentSession.dryingLog;
+  if (log.dates.length < 2) return 0;
+  const keys = getAllHarvestPlotKeys();
+  let stable = 0;
+  keys.forEach(function(key) {
+    if (isPlotStable(key)) stable++;
+  });
+  return stable;
+}
+
+function isPlotStable(key) {
+  const log = currentSession.dryingLog;
+  if (!log || log.dates.length < 2) return false;
+  const weights = log.weights[key] || {};
+  const lastTwo = log.dates.slice(-2);
+  const w1 = parseFloat(weights[lastTwo[0]]);
+  const w2 = parseFloat(weights[lastTwo[1]]);
+  if (isNaN(w1) || isNaN(w2) || w1 === 0) return false;
+  return Math.abs(w2 - w1) / w1 <= STABILITY_THRESHOLD;
+}
+
+function getFinalDryWeight(key) {
+  const log = currentSession.dryingLog;
+  if (!log || log.dates.length === 0) return null;
+  const weights = log.weights[key] || {};
+  const lastDate = log.dates[log.dates.length - 1];
+  return weights[lastDate] || null;
+}
+
+function openDryingLog() {
+  if (!currentSession.dryingLog) {
+    currentSession.dryingLog = { dates: [], weights: {} };
+  }
+  document.getElementById('drying-info-bar').textContent =
+    currentSession.date + ' \u00b7 ' + currentSession.side + ' \u00b7 ' + currentSession.crop;
+  renderDryingLog();
+  showScreen('screen-drying-log');
+}
+
+function renderDryingLog() {
+  const log = currentSession.dryingLog;
+  const keys = getAllHarvestPlotKeys();
+  const content = document.getElementById('drying-log-content');
+
+  if (log.dates.length === 0) {
+    content.innerHTML =
+      '<div style="padding:32px;text-align:center;color:#999;">' +
+      '<div style="font-size:48px;margin-bottom:12px;">\u2696\ufe0f</div>' +
+      '<div style="font-size:16px;font-weight:600;">No weigh dates yet</div>' +
+      '<div style="font-size:14px;margin-top:8px;">Tap + Add Weigh Date to start tracking</div>' +
+      '</div>';
+    return;
+  }
+
+  let html = '';
+
+  // Summary stability header
+  const stableCount = getDryingStableCount();
+  const total = keys.length;
+  const allStable = stableCount === total;
+  html += '<div style="margin:12px 16px;padding:12px 16px;border-radius:10px;background:' +
+    (allStable ? '#e8f5e8' : '#fff8e8') + ';border:1.5px solid ' + (allStable ? '#c3e6c3' : '#f0c060') + ';">' +
+    '<div style="font-weight:700;font-size:15px;color:' + (allStable ? '#2d6a2d' : '#c17f24') + ';">' +
+    (allStable ? '\u2705 All samples stable!' : '\ud83d\udd04 ' + stableCount + ' of ' + total + ' samples stable') +
+    '</div>' +
+    '<div style="font-size:12px;color:#777;margin-top:2px;">Threshold: \u22641% change between last two weighings</div>' +
+    '</div>';
+
+  // Table header
+  html += '<div style="overflow-x:auto;padding:0 16px 16px;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+  html += '<thead><tr style="background:#f5f5f5;">';
+  html += '<th style="padding:8px 6px;text-align:left;font-weight:700;border-bottom:2px solid #ddd;white-space:nowrap;">Plot</th>';
+  log.dates.forEach(function(d) {
+    html += '<th style="padding:8px 6px;text-align:center;font-weight:700;border-bottom:2px solid #ddd;white-space:nowrap;">' + d + '</th>';
+  });
+  if (log.dates.length >= 2) {
+    html += '<th style="padding:8px 6px;text-align:center;font-weight:700;border-bottom:2px solid #ddd;">% Change</th>';
+    html += '<th style="padding:8px 6px;text-align:center;font-weight:700;border-bottom:2px solid #ddd;">Status</th>';
+  }
+  html += '</tr></thead><tbody>';
+
+  keys.forEach(function(key, idx) {
+    const label = key.indexOf('_BOX') >= 0 ? key.replace('_BOX', ' Box') : key;
+    const weights = log.weights[key] || {};
+    const stable = isPlotStable(key);
+    const rowBg = idx % 2 === 0 ? '#fff' : '#fafafa';
+
+    html += '<tr style="background:' + rowBg + ';">';
+    html += '<td style="padding:8px 6px;font-weight:600;white-space:nowrap;">' + label + '</td>';
+
+    log.dates.forEach(function(d) {
+      const w = weights[d] || '';
+      html += '<td style="padding:4px 2px;text-align:center;">' +
+        '<input type="number" inputmode="decimal" ' +
+        'style="width:64px;text-align:center;padding:4px;border:1.5px solid #ddd;border-radius:6px;font-size:13px;" ' +
+        'value="' + w + '" ' +
+        'onchange="updateDryWeight(\'' + key + '\',\'' + d + '\',this.value)">' +
+        '</td>';
+    });
+
+    if (log.dates.length >= 2) {
+      const lastTwo = log.dates.slice(-2);
+      const w1 = parseFloat(weights[lastTwo[0]]);
+      const w2 = parseFloat(weights[lastTwo[1]]);
+      let pctChange = '\u2014';
+      if (!isNaN(w1) && !isNaN(w2) && w1 > 0) {
+        pctChange = (Math.abs(w2 - w1) / w1 * 100).toFixed(2) + '%';
+      }
+      html += '<td style="padding:8px 6px;text-align:center;color:#555;">' + pctChange + '</td>';
+      html += '<td style="padding:8px 6px;text-align:center;">' +
+        (stable ? '\u2705' : '\ud83d\udd04') + '</td>';
+    }
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  content.innerHTML = html;
+}
+
+function updateDryWeight(key, date, value) {
+  if (!currentSession.dryingLog.weights[key]) {
+    currentSession.dryingLog.weights[key] = {};
+  }
+  currentSession.dryingLog.weights[key][date] = value ? parseFloat(value) : null;
+  saveCurrentSession();
+  // Re-render to update stability indicators
+  renderDryingLog();
+}
+
+function addDryingDate() {
+  const date = prompt('Enter weigh date (YYYY-MM-DD):');
+  if (!date) return;
+  if (!currentSession.dryingLog) currentSession.dryingLog = { dates: [], weights: {} };
+  if (currentSession.dryingLog.dates.indexOf(date) >= 0) {
+    showToast('That date already exists');
+    return;
+  }
+  currentSession.dryingLog.dates.push(date);
+  currentSession.dryingLog.dates.sort();
+  saveCurrentSession();
+  renderDryingLog();
+  showToast('Added ' + date);
 }
 
 // --- SESSIONS LIST ---
 function renderSessionsList() {
   const sessions = getSessions();
   const list = document.getElementById('sessions-list');
-  const all = Object.values(sessions).sort(function(a,b){return b.id - a.id;});
+  const all = Object.values(sessions).sort(function(a,b){return b.id-a.id;});
   if (all.length === 0) {
     list.innerHTML = '<p style="color:#999;text-align:center;padding:40px;">No sessions yet</p>';
     return;
@@ -596,7 +792,6 @@ function renderSessionsList() {
       '</div>';
   }).join('');
 }
-
 function deleteSession(id) {
   if (!confirm('Delete this session? This cannot be undone.')) return;
   const sessions = getSessions();
@@ -605,12 +800,13 @@ function deleteSession(id) {
   renderSessionsList();
   showToast('Session deleted');
 }
-
 function openSession(id) {
   const sessions = getSessions();
   currentSession = sessions[id];
   selectedSide = currentSession.side;
   selectedSessionType = currentSession.type;
+  if (!currentSession.harvest) currentSession.harvest = {};
+  if (!currentSession.dryingLog) currentSession.dryingLog = { dates: [], weights: {} };
   showScreen('screen-session-menu');
   renderSessionMenu();
 }
@@ -623,6 +819,7 @@ function exportSession() {
   const date = currentSession.date;
   const doy  = getDOY(date);
   const sideChar = currentSession.side.charAt(0);
+  const isHarvest = currentSession.type === 'Harvest';
 
   // ---- SHEET 1: Summary ----
   const summaryHeader = ['Date','DOY','Plot Name','Growth Stage/#Leaves','Plot Size m2',
@@ -636,51 +833,45 @@ function exportSession() {
     ['A','B'].forEach(function(ab) {
       const key = span + sideChar + ab;
       const d = currentSession.plots[key] || {};
-      const heightM = d.avg_height ? parseFloat((parseFloat(d.avg_height) * 0.0254).toFixed(4)) : '';
+      const heightM = d.avg_height ? parseFloat((parseFloat(d.avg_height)*0.0254).toFixed(4)) : '';
       summaryRows.push([
         date, doy, key,
-        d.avg_leaves ? parseFloat(d.avg_leaves) : '', 1.524,
-        d.count1 || '', d.count2 || '',
-        d.plants_m2 ? parseFloat(d.plants_m2) : '',
-        d.avg_height ? parseFloat(d.avg_height) : '', heightM,
-        d.leaf_area || '', d.leaf_wet || '', d.stem_wet || '',
-        d.leaf_dry || '', d.stem_dry || '',
-        d.lai ? parseFloat(parseFloat(d.lai).toFixed(6)) : '',
-        d.agdm ? parseFloat(parseFloat(d.agdm).toFixed(2)) : '',
-        d.gps_lat || '', d.gps_lng || '',
-        d.cal_actual || '', d.cal_machine || '',
-        (d.notes || '') + (d.lab_notes ? ' | ' + d.lab_notes : '')
+        d.avg_leaves?parseFloat(d.avg_leaves):'', 1.524,
+        d.count1||'', d.count2||'',
+        d.plants_m2?parseFloat(d.plants_m2):'',
+        d.avg_height?parseFloat(d.avg_height):'', heightM,
+        d.leaf_area||'', d.leaf_wet||'', d.stem_wet||'',
+        d.leaf_dry||'', d.stem_dry||'',
+        d.lai?parseFloat(parseFloat(d.lai).toFixed(6)):'',
+        d.agdm?parseFloat(parseFloat(d.agdm).toFixed(2)):'',
+        d.gps_lat||'', d.gps_lng||'',
+        d.cal_actual||'', d.cal_machine||'',
+        (d.notes||'')+(d.lab_notes?' | '+d.lab_notes:'')
       ]);
     });
   });
 
   QUADRANTS.forEach(function(q) {
     ROWS.forEach(function(r) {
-      const key = q + '_' + r;
-      const d = currentSession.refs[key] || {};
-      const heightM = d.avg_height ? parseFloat((parseFloat(d.avg_height) * 0.0254).toFixed(4)) : '';
-      summaryRows.push([
-        date, doy, q+' '+r,
-        d.avg_leaves ? parseFloat(d.avg_leaves) : '', 1.524, '', '', '',
-        d.avg_height ? parseFloat(d.avg_height) : '', heightM,
-        '','','','','','','','','','','',
-        d.notes || ''
-      ]);
+      const key = q+'_'+r;
+      const d = currentSession.refs[key]||{};
+      const heightM = d.avg_height?parseFloat((parseFloat(d.avg_height)*0.0254).toFixed(4)):'';
+      summaryRows.push([date,doy,q+' '+r,
+        d.avg_leaves?parseFloat(d.avg_leaves):'',1.524,'','','',
+        d.avg_height?parseFloat(d.avg_height):'',heightM,
+        '','','','','','','','','','','',d.notes||'']);
     });
   });
 
-  if (currentSession.type === 'Harvest') {
+  if (isHarvest) {
     QUADRANTS.forEach(function(q) {
-      const key = q + '_BOX';
-      const d = currentSession.lys[key] || {};
-      const heightM = d.avg_height ? parseFloat((parseFloat(d.avg_height) * 0.0254).toFixed(4)) : '';
-      summaryRows.push([
-        date, doy, q+' BOX',
-        d.avg_leaves ? parseFloat(d.avg_leaves) : '', '', '', '', '',
-        d.avg_height ? parseFloat(d.avg_height) : '', heightM,
-        '','','','','','','','','','','',
-        d.notes || ''
-      ]);
+      const key = q+'_BOX';
+      const d = currentSession.lys[key]||{};
+      const heightM = d.avg_height?parseFloat((parseFloat(d.avg_height)*0.0254).toFixed(4)):'';
+      summaryRows.push([date,doy,q+' BOX',
+        d.avg_leaves?parseFloat(d.avg_leaves):'','','','','',
+        d.avg_height?parseFloat(d.avg_height):'',heightM,
+        '','','','','','','','','','','',d.notes||'']);
     });
   }
 
@@ -692,77 +883,123 @@ function exportSession() {
 
   SPANS.forEach(function(span) {
     ['A','B'].forEach(function(ab) {
-      const key = span + sideChar + ab;
-      const d = currentSession.plots[key] || {};
-      plantRows.push([
-        date, doy, key,
-        d.h1 || '', d.h2 || '', d.h3 || '', d.h4 || '', d.h5 || '',
-        d.avg_height ? parseFloat(d.avg_height) : '',
-        d.l1 || '', d.l2 || '', d.l3 || '', d.l4 || '', d.l5 || '',
-        d.avg_leaves ? parseFloat(d.avg_leaves) : ''
+      const key = span+sideChar+ab;
+      const d = currentSession.plots[key]||{};
+      plantRows.push([date,doy,key,
+        d.h1||'',d.h2||'',d.h3||'',d.h4||'',d.h5||'',
+        d.avg_height?parseFloat(d.avg_height):'',
+        d.l1||'',d.l2||'',d.l3||'',d.l4||'',d.l5||'',
+        d.avg_leaves?parseFloat(d.avg_leaves):''
       ]);
     });
   });
-
   QUADRANTS.forEach(function(q) {
     ROWS.forEach(function(r) {
-      const key = q + '_' + r;
-      const d = currentSession.refs[key] || {};
-      plantRows.push([
-        date, doy, q+' '+r,
-        d.h1 || '', d.h2 || '', d.h3 || '', d.h4 || '', d.h5 || '',
-        d.avg_height ? parseFloat(d.avg_height) : '',
-        d.l1 || '', d.l2 || '', d.l3 || '', d.l4 || '', d.l5 || '',
-        d.avg_leaves ? parseFloat(d.avg_leaves) : ''
+      const key=q+'_'+r;
+      const d=currentSession.refs[key]||{};
+      plantRows.push([date,doy,q+' '+r,
+        d.h1||'',d.h2||'',d.h3||'',d.h4||'',d.h5||'',
+        d.avg_height?parseFloat(d.avg_height):'',
+        d.l1||'',d.l2||'',d.l3||'',d.l4||'',d.l5||'',
+        d.avg_leaves?parseFloat(d.avg_leaves):''
       ]);
     });
   });
-
   QUADRANTS.forEach(function(q) {
-    const key = q + '_BOX';
-    const d = currentSession.lys[key] || {};
-    plantRows.push([
-      date, doy, q+' BOX',
-      d.h1 || '', d.h2 || '', d.h3 || '', d.h4 || '', d.h5 || '',
-      d.avg_height ? parseFloat(d.avg_height) : '',
-      d.l1 || '', d.l2 || '', d.l3 || '', d.l4 || '', d.l5 || '',
-      d.avg_leaves ? parseFloat(d.avg_leaves) : ''
+    const key=q+'_BOX';
+    const d=currentSession.lys[key]||{};
+    plantRows.push([date,doy,q+' BOX',
+      d.h1||'',d.h2||'',d.h3||'',d.h4||'',d.h5||'',
+      d.avg_height?parseFloat(d.avg_height):'',
+      d.l1||'',d.l2||'',d.l3||'',d.l4||'',d.l5||'',
+      d.avg_leaves?parseFloat(d.avg_leaves):''
     ]);
   });
 
-  // ---- BUILD XLSX using SheetJS ----
+  // ---- SHEET 3: Harvest Data (harvest sessions only) ----
+  let harvestRows = null;
+  let dryingRows = null;
+
+  if (isHarvest) {
+    const harvestHeader = ['Plot Name','Plot Ft','Nutrient Sample Wt g',
+      'Biomass Wet Wt lbs','Biomass Sub Wet Wt g',
+      'Zip Lock Bag Wt g','Purple Bag Wt g','Brown Paper Bag Avg Wt g',
+      'Final Dry Wt g','Notes'];
+    harvestRows = [harvestHeader];
+    const harvestKeys = getAllHarvestPlotKeys();
+    harvestKeys.forEach(function(key) {
+      const h = currentSession.harvest[key]||{};
+      const label = key.indexOf('_BOX')>=0?key.replace('_BOX',' Box'):key;
+      const finalDry = getFinalDryWeight(key);
+      harvestRows.push([label,
+        h.plot_ft||'', h.nutrient_wt||'', h.biomass_wet_lbs||'', h.biomass_sub_wet||'',
+        h.ziplock_wt||'', h.purple_wt||'', h.brown_wt||'',
+        finalDry||'', h.notes||''
+      ]);
+    });
+
+    // ---- SHEET 4: Drying Log ----
+    const log = currentSession.dryingLog||{dates:[],weights:{}};
+    if (log.dates.length > 0) {
+      const dryingHeader = ['Plot Name'].concat(log.dates).concat(['% Last Change','Stable?','Final Dry Wt g']);
+      dryingRows = [dryingHeader];
+      harvestKeys.forEach(function(key) {
+        const label = key.indexOf('_BOX')>=0?key.replace('_BOX',' Box'):key;
+        const weights = log.weights[key]||{};
+        const weightVals = log.dates.map(function(d){return weights[d]||'';});
+        let pctChange = '';
+        let stableStr = '';
+        if (log.dates.length >= 2) {
+          const lastTwo = log.dates.slice(-2);
+          const w1 = parseFloat(weights[lastTwo[0]]);
+          const w2 = parseFloat(weights[lastTwo[1]]);
+          if (!isNaN(w1)&&!isNaN(w2)&&w1>0) {
+            pctChange = (Math.abs(w2-w1)/w1*100).toFixed(2)+'%';
+            stableStr = (Math.abs(w2-w1)/w1 <= STABILITY_THRESHOLD) ? 'Yes' : 'No';
+          }
+        }
+        const finalDry = getFinalDryWeight(key);
+        dryingRows.push([label].concat(weightVals).concat([pctChange, stableStr, finalDry||'']));
+      });
+    }
+  }
+
+  // ---- BUILD XLSX ----
   if (typeof XLSX === 'undefined') {
     showToast('Loading export library...');
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    script.onload = function() { buildAndDownloadXLSX(summaryRows, plantRows, date); };
+    script.onload = function() { buildXLSX(summaryRows, plantRows, harvestRows, dryingRows, date); };
     document.head.appendChild(script);
   } else {
-    buildAndDownloadXLSX(summaryRows, plantRows, date);
+    buildXLSX(summaryRows, plantRows, harvestRows, dryingRows, date);
   }
 }
 
-function buildAndDownloadXLSX(summaryRows, plantRows, date) {
+function buildXLSX(summaryRows, plantRows, harvestRows, dryingRows, date) {
   const wb = XLSX.utils.book_new();
 
   const ws1 = XLSX.utils.aoa_to_sheet(summaryRows);
-  // Set column widths for summary sheet
-  ws1['!cols'] = [
-    {wch:12},{wch:5},{wch:10},{wch:10},{wch:10},
-    {wch:10},{wch:10},{wch:10},{wch:14},{wch:14},
-    {wch:14},{wch:16},{wch:16},{wch:16},{wch:16},
-    {wch:10},{wch:20},{wch:12},{wch:12},
-    {wch:18},{wch:22},{wch:30}
-  ];
+  ws1['!cols'] = [{wch:12},{wch:5},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},
+    {wch:14},{wch:14},{wch:14},{wch:16},{wch:16},{wch:16},{wch:16},{wch:10},{wch:20},
+    {wch:12},{wch:12},{wch:18},{wch:22},{wch:30}];
   XLSX.utils.book_append_sheet(wb, ws1, 'Summary');
 
   const ws2 = XLSX.utils.aoa_to_sheet(plantRows);
-  ws2['!cols'] = [
-    {wch:12},{wch:5},{wch:10},
-    {wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:12},
-    {wch:6},{wch:6},{wch:6},{wch:6},{wch:6},{wch:12}
-  ];
+  ws2['!cols'] = [{wch:12},{wch:5},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},
+    {wch:12},{wch:6},{wch:6},{wch:6},{wch:6},{wch:6},{wch:12}];
   XLSX.utils.book_append_sheet(wb, ws2, 'Individual Readings');
+
+  if (harvestRows) {
+    const ws3 = XLSX.utils.aoa_to_sheet(harvestRows);
+    ws3['!cols'] = [{wch:12},{wch:10},{wch:20},{wch:18},{wch:20},{wch:16},{wch:16},{wch:22},{wch:14},{wch:30}];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Harvest Data');
+  }
+
+  if (dryingRows) {
+    const ws4 = XLSX.utils.aoa_to_sheet(dryingRows);
+    XLSX.utils.book_append_sheet(wb, ws4, 'Drying Log');
+  }
 
   const filename = 'field_data_' + currentSession.side + '_' + date + '.xlsx';
   XLSX.writeFile(wb, filename);
@@ -771,24 +1008,37 @@ function buildAndDownloadXLSX(summaryRows, plantRows, date) {
 
 function getDOY(dateStr) {
   const d = new Date(dateStr);
-  const start = new Date(d.getFullYear(), 0, 0);
-  return Math.floor((d - start) / 86400000);
+  const start = new Date(d.getFullYear(),0,0);
+  return Math.floor((d-start)/86400000);
 }
 
-// --- TOAST ---
+function getAllHarvestPlotKeys() {
+  const sideChar = currentSession.side.charAt(0);
+  const keys = [];
+  SPANS.forEach(function(span){['A','B'].forEach(function(ab){keys.push(span+sideChar+ab);});});
+  QUADRANTS.forEach(function(q){keys.push(q+'_BOX');});
+  return keys;
+}
+
+function getFinalDryWeight(key) {
+  const log = currentSession.dryingLog;
+  if (!log||log.dates.length===0) return null;
+  const weights = log.weights[key]||{};
+  const lastDate = log.dates[log.dates.length-1];
+  return weights[lastDate]||null;
+}
+
 function showToast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.add('show');
-  setTimeout(function() { el.classList.remove('show'); }, 2500);
+  setTimeout(function(){el.classList.remove('show');},2500);
 }
 
-// --- INIT ---
-window.addEventListener('load', function() { renderHome(); });
+window.addEventListener('load', function(){renderHome();});
 
-// Unregister any old service workers
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(function(regs) {
-    regs.forEach(function(r) { r.unregister(); });
+  navigator.serviceWorker.getRegistrations().then(function(regs){
+    regs.forEach(function(r){r.unregister();});
   });
 }

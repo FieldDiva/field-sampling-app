@@ -70,57 +70,69 @@
     </div>
   </div>
 
-  <!-- SCREEN: Session Menu (list of plots to fill out) -->
+  <!-- SCREEN: Session Menu -->
   <div id="screen-session-menu" class="screen">
     <div class="screen-header">
       <button class="btn-back" onclick="showScreen('screen-home')">← Home</button>
       <h2 id="session-menu-title">Session</h2>
     </div>
     <div class="session-info-bar" id="session-info-bar"></div>
-
     <div class="session-scroll">
       <div class="section-label">DESTRUCTIVE SAMPLES</div>
       <div id="plot-list" class="plot-list"></div>
-
       <div class="section-label">REFERENCE ROWS</div>
       <div id="ref-list" class="plot-list"></div>
-
       <div class="section-label">LYSIMETER BOXES</div>
       <div id="lys-list" class="plot-list"></div>
+      <div id="harvest-section" style="display:none">
+        <div class="section-label">HARVEST</div>
+        <div id="harvest-list" class="plot-list"></div>
+      </div>
     </div>
-
     <div class="screen-footer">
       <button class="btn-secondary" onclick="showScreen('screen-sessions')">Save & Exit</button>
       <button class="btn-primary" onclick="exportSession()">Export Excel</button>
     </div>
   </div>
 
-  <!-- SCREEN: Field Entry (destructive plot) -->
+  <!-- SCREEN: Field/Lab Entry -->
   <div id="screen-field-entry" class="screen">
     <div class="screen-header">
       <button class="btn-back" onclick="backToSessionMenu()">← Back</button>
       <h2 id="field-entry-title">Plot</h2>
       <span id="field-entry-badge" class="badge"></span>
     </div>
-    <div class="form-body" id="field-entry-form">
-      <!-- Dynamically filled -->
-    </div>
+    <div class="form-body" id="field-entry-form"></div>
     <div class="screen-footer">
       <button class="btn-primary" onclick="saveFieldEntry()">Save →</button>
     </div>
   </div>
 
-  <!-- SCREEN: Lab Entry -->
-  <div id="screen-lab-entry" class="screen">
+  <!-- SCREEN: Harvest Entry -->
+  <div id="screen-harvest-entry" class="screen">
     <div class="screen-header">
       <button class="btn-back" onclick="backToSessionMenu()">← Back</button>
-      <h2 id="lab-entry-title">Lab Data</h2>
+      <h2 id="harvest-entry-title">Harvest</h2>
+      <span id="harvest-entry-badge" class="badge" style="background:#fdecea;color:#c0392b;">HARVEST</span>
     </div>
-    <div class="form-body" id="lab-entry-form">
-      <!-- Dynamically filled -->
-    </div>
+    <div class="form-body" id="harvest-entry-form"></div>
     <div class="screen-footer">
-      <button class="btn-primary" onclick="saveLabEntry()">Save →</button>
+      <button class="btn-primary" onclick="saveHarvestEntry()">Save →</button>
+    </div>
+  </div>
+
+  <!-- SCREEN: Drying Log -->
+  <div id="screen-drying-log" class="screen">
+    <div class="screen-header">
+      <button class="btn-back" onclick="backToSessionMenu()">← Back</button>
+      <h2>Drying Log</h2>
+      <span class="badge" style="background:#fdecea;color:#c0392b;">HARVEST</span>
+    </div>
+    <div class="session-info-bar" id="drying-info-bar"></div>
+    <div class="session-scroll" id="drying-log-content"></div>
+    <div class="screen-footer">
+      <button class="btn-secondary" onclick="addDryingDate()">+ Add Weigh Date</button>
+      <button class="btn-primary" onclick="backToSessionMenu()">Done</button>
     </div>
   </div>
 
