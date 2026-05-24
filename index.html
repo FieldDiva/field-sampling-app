@@ -9,6 +9,7 @@
   <title>Field Sampler</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -33,6 +34,7 @@
     <div class="home-actions">
       <button class="btn-primary" onclick="showScreen('screen-new-session')">+ New Sampling Session</button>
       <button class="btn-secondary" onclick="showScreen('screen-sessions')">View Past Sessions</button>
+      <button class="btn-secondary" onclick="openFieldMap(false)">🗺 View Field Map</button>
       <button class="btn-text" onclick="showScreen('screen-crop-select')">Change Crop</button>
     </div>
     <div id="home-recent" class="recent-sessions"></div>
@@ -130,6 +132,30 @@
     </div>
   </div>
 
+  <!-- SCREEN: Map -->
+  <div id="screen-map" class="screen">
+    <div class="screen-header">
+      <button class="btn-back" id="map-back-btn" onclick="closeMap()">← Back</button>
+      <h2 id="map-title">Field Map</h2>
+      <span id="map-mode-badge" class="badge" style="display:none;background:#fdecea;color:#c0392b;">CAPTURE</span>
+    </div>
+    <div style="flex:1;position:relative;">
+      <div id="map" style="width:100%;height:100%;"></div>
+      <button onclick="centerOnLocation()" style="
+        position:absolute;bottom:16px;right:16px;z-index:1000;
+        background:#fff;border:none;border-radius:50%;
+        width:48px;height:48px;font-size:22px;
+        box-shadow:0 2px 10px rgba(0,0,0,0.3);cursor:pointer;
+        display:flex;align-items:center;justify-content:center;">
+        🎯
+      </button>
+    </div>
+    <div id="map-capture-footer" class="screen-footer" style="display:none;flex-direction:column;gap:8px;align-items:stretch;">
+      <div id="map-coords-display" style="text-align:center;font-size:13px;color:#777;font-weight:600;padding:4px 0;">Locating...</div>
+      <button class="btn-primary" onclick="captureFromMap()">📍 Drop Pin at My Location</button>
+    </div>
+  </div>
+
   <!-- SCREEN: Harvest Entry -->
   <div id="screen-harvest-entry" class="screen">
     <div class="screen-header">
@@ -167,6 +193,7 @@
   </div>
 
   <div id="toast" class="toast"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
