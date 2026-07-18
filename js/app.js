@@ -974,7 +974,7 @@ function exportSession(){
       'Row 1 Count','Row 2 Count','# Plants/m2','Plant Height in','Plant Height m','Leaf Area cm2',
       'Leaf Wet Weight g','Stem Wet Weight g','Leaf Dry Weight g','Stem Dry Weight g',
       'LAI','Above Ground Dry Matter g/m2','GPS Lat','GPS Lng',
-      'Cal Card Actual cm2','Cal Machine Reading cm2','Notes'];
+      'Cal Card Actual cm2','Cal Machine Reading cm2','Cal Factor','Corrected Leaf Area cm2','Notes'];
     const summaryRows=[summaryHeader];
     SPANS.forEach(function(span){['A','B'].forEach(function(ab){
       const key=span+sc+ab,d=currentSession.plots[key]||{};
@@ -989,6 +989,8 @@ function exportSession(){
         d.agdm?parseFloat(parseFloat(d.agdm).toFixed(2)):'',
         d.gps_lat||'',d.gps_lng||'',
         d.cal_actual||'',d.cal_machine||'',
+        (d.cal_actual&&d.cal_machine&&d.cal_machine>0)?(d.cal_actual/d.cal_machine).toFixed(4):'',
+        (d.leaf_area&&d.cal_actual&&d.cal_machine&&d.cal_machine>0)?(d.leaf_area*(d.cal_actual/d.cal_machine)).toFixed(2):'',
         (d.notes||'')+(d.lab_notes?' | '+d.lab_notes:'')
       ]);
     });});
