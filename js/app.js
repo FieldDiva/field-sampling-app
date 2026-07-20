@@ -9,18 +9,6 @@ const ROWS = ['R1', 'R2', 'R3', 'R4'];
 const STABILITY_THRESHOLD = 0.01;
 const LBS_TO_G = 453.592;
 
-// --- FIELD CONSTANTS ---
-const INDEX_CARD_AREA_CM2 = 96.774;
-
-// Drying bag weights by side and group (g)
-const DRYING_BAG_WEIGHTS = {
-  'East': { 'A': 34.43, 'B': 33.3 },
-  'West': { 'A': 33.3,  'B': 31.27 }
-};
-
-const HARVEST_PURPLE_BAG_G = 19.160;
-const HARVEST_ZIPLOCK_BAG_G = 8.53;
-
 const CROPS = [
   { id: 'forage_sorghum', name: 'Forage Sorghum', icon: '🌾', desc: 'Annual forage crop' },
 ];
@@ -128,11 +116,6 @@ function initNewSessionForm() {
   document.getElementById('type-harvest').classList.remove('active');
   document.getElementById('harvest-bag-weights').style.display = 'none';
   document.getElementById('session-tech').value = '';
-  // Pre-fill harvest bag weights with known constants
-  const zlEl = document.getElementById('bag-ziplock');
-  const purpEl = document.getElementById('bag-purple');
-  if (zlEl && !zlEl.value) zlEl.value = HARVEST_ZIPLOCK_BAG_G;
-  if (purpEl && !purpEl.value) purpEl.value = HARVEST_PURPLE_BAG_G;
   if (selectedCrop) document.getElementById('session-crop-display').textContent = selectedCrop.name;
 }
 function selectSide(side) {
@@ -157,8 +140,8 @@ function startSession() {
     plots: {}, refs: {}, lys: {}, harvest: {},
     dryingLog: {},
     bagWeights: {
-      ziplock: parseFloat(document.getElementById('bag-ziplock').value)||HARVEST_ZIPLOCK_BAG_G,
-      purple: parseFloat(document.getElementById('bag-purple').value)||HARVEST_PURPLE_BAG_G,
+      ziplock: parseFloat(document.getElementById('bag-ziplock').value)||null,
+      purple: parseFloat(document.getElementById('bag-purple').value)||null,
       brownPaper: parseFloat(document.getElementById('bag-brown').value)||null
     }
   };
@@ -401,16 +384,6 @@ function calcLAI() {
 }
 
 // --- HARVEST HELPERS ---
-
-function getDryingBagWeight() {
-  if (!currentSession || !currentPlotKey) return null;
-  const bags = DRYING_BAG_WEIGHTS[currentSession.side];
-  if (!bags) return null;
-  const match = currentPlotKey.match(/[EW]([AB])$/);
-  if (match) return bags[match[1]] || null;
-  return null;
-}
-
 function getBW() { return currentSession.bagWeights||{}; }
 function calcHarvestWeights() {
   const bw=getBW();
@@ -564,8 +537,8 @@ function openGroup(group) {
 
   const plotList = document.getElementById('plot-list');
   const refList = document.getElementById('ref-list');
-  if (plotList) plotList.innerHTML = '';
-  if (refList) refList.innerHTML = '';
+  plotList.innerHTML = '';
+  refList.innerHTML = '';
 
   if (group === 'A' || group === 'B') {
     SPANS.forEach(function(span){
@@ -611,7 +584,6 @@ function openGroup(group) {
 
 // --- DESTRUCTIVE PLOT ENTRY ---
 function openPlotEntry(key) {
-  try {
   currentPlotKey=key; currentMode='destructive';
   const data=currentSession.plots[key]||{};
   const isLys=LYSIMETER_SPANS.indexOf(parseInt(key))>=0;
@@ -657,13 +629,13 @@ function openPlotEntry(key) {
     '<div id="tab-content-lab" style="display:none;flex-direction:column;gap:14px;">'+
     '<div class="form-section-title">LEAF AREA METER CALIBRATION</div>'+
     '<div class="field-group"><label>Index Card Actual Area (cm\u00b2)</label>'+
-    '<input type="number" inputmode="decimal" id="lab-cal-actual" value="'+(data.cal_actual||INDEX_CARD_AREA_CM2)+'" placeholder="e.g. 90.32"></div>'+
+    '<input type="number" inputmode="decimal" id="lab-cal-actual" value="'+(data.cal_actual||'')+'" placeholder="e.g. 90.32"></div>'+
     '<div class="field-group"><label>LA Machine Reading for Card (cm\u00b2)</label>'+
     '<input type="number" inputmode="decimal" id="lab-cal-machine" value="'+(data.cal_machine||'')+'" placeholder="e.g. 91.50"></div>'+
     '<div class="field-group"><label>Leaf Area (cm\u00b2)</label>'+
     '<input type="number" inputmode="decimal" id="lab-leaf-area" value="'+(data.leaf_area||'')+'" oninput="calcLAI()"></div>'+
     '<div class="field-group"><label>Bag Weight (g)</label>'+
-    '<input type="number" inputmode="decimal" id="lab-bag-weight" value="'+(data.bag_weight||getDryingBagWeight()||'')+'" oninput="calcLAI()"></div>'+
+    '<input type="number" inputmode="decimal" id="lab-bag-weight" value="'+(data.bag_weight||'')+'" oninput="calcLAI()"></div>'+
     '<div class="form-section-title">WET WEIGHTS (before bag subtraction)</div>'+
     '<div class="field-group"><label>Leaf Wet Weight (g)</label>'+
     '<input type="number" inputmode="decimal" id="lab-leaf-wet" value="'+(data.leaf_wet_raw||'')+'"></div>'+
@@ -684,9 +656,6 @@ function openPlotEntry(key) {
   document.getElementById('f-count1').addEventListener('input',calcPlantsM2);
   document.getElementById('f-count2').addEventListener('input',calcPlantsM2);
   showScreen('screen-field-entry');
-}
-
-  } catch(e) { showToast('Error: ' + e.message); console.error(e); }
 }
 
 function openMapForCapture() {
