@@ -564,8 +564,8 @@ function openGroup(group) {
 
   const plotList = document.getElementById('plot-list');
   const refList = document.getElementById('ref-list');
-  plotList.innerHTML = '';
-  refList.innerHTML = '';
+  if (plotList) plotList.innerHTML = '';
+  if (refList) refList.innerHTML = '';
 
   if (group === 'A' || group === 'B') {
     SPANS.forEach(function(span){
@@ -611,6 +611,7 @@ function openGroup(group) {
 
 // --- DESTRUCTIVE PLOT ENTRY ---
 function openPlotEntry(key) {
+  try {
   currentPlotKey=key; currentMode='destructive';
   const data=currentSession.plots[key]||{};
   const isLys=LYSIMETER_SPANS.indexOf(parseInt(key))>=0;
@@ -683,6 +684,9 @@ function openPlotEntry(key) {
   document.getElementById('f-count1').addEventListener('input',calcPlantsM2);
   document.getElementById('f-count2').addEventListener('input',calcPlantsM2);
   showScreen('screen-field-entry');
+}
+
+  } catch(e) { showToast('Error: ' + e.message); console.error(e); }
 }
 
 function openMapForCapture() {
