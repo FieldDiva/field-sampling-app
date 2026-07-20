@@ -401,6 +401,16 @@ function calcLAI() {
 }
 
 // --- HARVEST HELPERS ---
+
+function getDryingBagWeight() {
+  if (!currentSession || !currentPlotKey) return null;
+  const bags = DRYING_BAG_WEIGHTS[currentSession.side];
+  if (!bags) return null;
+  const match = currentPlotKey.match(/[EW]([AB])$/);
+  if (match) return bags[match[1]] || null;
+  return null;
+}
+
 function getBW() { return currentSession.bagWeights||{}; }
 function calcHarvestWeights() {
   const bw=getBW();
