@@ -373,13 +373,17 @@ function calcAvg(prefix, displayId) {
 function calcLAI() {
   const la=parseFloat(document.getElementById('lab-leaf-area')?document.getElementById('lab-leaf-area').value:'');
   const bagWt=parseFloat(document.getElementById('lab-bag-weight')?document.getElementById('lab-bag-weight').value:'')||0;
+  const leafBagCount=parseFloat(document.getElementById('lab-leaf-bag-count')?document.getElementById('lab-leaf-bag-count').value:'')||1;
+  const stemBagCount=parseFloat(document.getElementById('lab-stem-bag-count')?document.getElementById('lab-stem-bag-count').value:'')||1;
+  const leafBagTotal=bagWt*leafBagCount;
+  const stemBagTotal=bagWt*stemBagCount;
   const ldr=parseFloat(document.getElementById('lab-leaf-dry')?document.getElementById('lab-leaf-dry').value:'');
   const sdr=parseFloat(document.getElementById('lab-stem-dry')?document.getElementById('lab-stem-dry').value:'');
   const laiEl=document.getElementById('lab-lai');
   const agdmEl=document.getElementById('lab-agdm');
   if (!isNaN(la)){laiEl.textContent=(la/15239.96).toFixed(4);laiEl.classList.add('has-value');}
   else{laiEl.textContent='\u2014';laiEl.classList.remove('has-value');}
-  if (!isNaN(ldr)&&!isNaN(sdr)){agdmEl.textContent=((ldr-bagWt)+(sdr-bagWt)).toFixed(2)+' g/m\u00b2';agdmEl.classList.add('has-value');}
+  if (!isNaN(ldr)&&!isNaN(sdr)){agdmEl.textContent=((ldr-leafBagTotal)+(sdr-stemBagTotal)).toFixed(2)+' g/m\u00b2';agdmEl.classList.add('has-value');}
   else{agdmEl.textContent='\u2014';agdmEl.classList.remove('has-value');}
 }
 
@@ -636,6 +640,10 @@ function openPlotEntry(key) {
     '<input type="number" inputmode="decimal" id="lab-leaf-area" value="'+(data.leaf_area||'')+'" oninput="calcLAI()"></div>'+
     '<div class="field-group"><label>Bag Weight (g)</label>'+
     '<input type="number" inputmode="decimal" id="lab-bag-weight" value="'+(data.bag_weight||'')+'" oninput="calcLAI()"></div>'+
+    '<div class="field-group"><label>Leaf Bag Count</label>'+
+    '<input type="number" inputmode="numeric" id="lab-leaf-bag-count" value="'+(data.leaf_bag_count||1)+'" min="1" max="10" oninput="autoSaveFieldEntry()"></div>'+
+    '<div class="field-group"><label>Stem Bag Count</label>'+
+    '<input type="number" inputmode="numeric" id="lab-stem-bag-count" value="'+(data.stem_bag_count||1)+'" min="1" max="10" oninput="autoSaveFieldEntry()"></div>'+
     '<div class="form-section-title">WET WEIGHTS (before bag subtraction)</div>'+
     '<div class="field-group"><label>Leaf Wet Weight (g)</label>'+
     '<input type="number" inputmode="decimal" id="lab-leaf-wet" value="'+(data.leaf_wet_raw||'')+'"></div>'+
@@ -690,12 +698,16 @@ function saveFieldEntry() {
   const avgL=validL.length?(validL.reduce(function(a,b){return a+b;},0)/validL.length):null;
   const la=parseFloat(document.getElementById('lab-leaf-area')?document.getElementById('lab-leaf-area').value:'')||null;
   const bagWt=parseFloat(document.getElementById('lab-bag-weight')?document.getElementById('lab-bag-weight').value:'')||0;
+  const leafBagCount=parseFloat(document.getElementById('lab-leaf-bag-count')?document.getElementById('lab-leaf-bag-count').value:'')||1;
+  const stemBagCount=parseFloat(document.getElementById('lab-stem-bag-count')?document.getElementById('lab-stem-bag-count').value:'')||1;
+  const leafBagTotal=bagWt*leafBagCount;
+  const stemBagTotal=bagWt*stemBagCount;
   const lwr=parseFloat(document.getElementById('lab-leaf-wet')?document.getElementById('lab-leaf-wet').value:'')||null;
   const swr=parseFloat(document.getElementById('lab-stem-wet')?document.getElementById('lab-stem-wet').value:'')||null;
   const ldr=parseFloat(document.getElementById('lab-leaf-dry')?document.getElementById('lab-leaf-dry').value:'')||null;
   const sdr=parseFloat(document.getElementById('lab-stem-dry')?document.getElementById('lab-stem-dry').value:'')||null;
   const lai=la?la/15239.96:null;
-  const agdm=(ldr&&sdr)?(ldr-bagWt)+(sdr-bagWt):null;
+  const agdm=(ldr&&sdr)?(ldr-leafBagTotal)+(sdr-stemBagTotal):null;
   if(!currentSession.plots[currentPlotKey])currentSession.plots[currentPlotKey]={};
   Object.assign(currentSession.plots[currentPlotKey],{
     gps_lat,gps_lng,count1:c1,count2:c2,plants_m2:pm2?pm2.toFixed(1):null,
@@ -705,12 +717,13 @@ function saveFieldEntry() {
     avg_leaves:avgL?avgL.toFixed(1):null,
     notes:document.getElementById('f-notes')?document.getElementById('f-notes').value:'',
     field_saved:validH.length>0||c1!==null,
-    leaf_area:la,bag_weight:bagWt||null,
+    leaf_area:la,bag_weight:bagWt||null,leaf_bag_count:leafBagCount,stem_bag_count:stemBagCount,
     cal_actual:parseFloat(document.getElementById('lab-cal-actual')?document.getElementById('lab-cal-actual').value:'')||null,
     cal_machine:parseFloat(document.getElementById('lab-cal-machine')?document.getElementById('lab-cal-machine').value:'')||null,
     leaf_wet_raw:lwr,stem_wet_raw:swr,leaf_dry_raw:ldr,stem_dry_raw:sdr,
-    leaf_wet:lwr!==null?lwr-bagWt:null,stem_wet:swr!==null?swr-bagWt:null,
-    leaf_dry:ldr!==null?ldr-bagWt:null,stem_dry:sdr!==null?sdr-bagWt:null,
+    leaf_bag_count:leafBagCount,stem_bag_count:stemBagCount,
+    leaf_wet:lwr!==null?lwr-leafBagTotal:null,stem_wet:swr!==null?swr-stemBagTotal:null,
+    leaf_dry:ldr!==null?ldr-leafBagTotal:null,stem_dry:sdr!==null?sdr-stemBagTotal:null,
     lai,agdm,
     lab_notes:document.getElementById('lab-notes')?document.getElementById('lab-notes').value:'',
     lab_saved:la!==null||ldr!==null
